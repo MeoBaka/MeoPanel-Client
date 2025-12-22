@@ -8,10 +8,29 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthModule = void 0;
 const common_1 = require("@nestjs/common");
+const typeorm_1 = require("@nestjs/typeorm");
+const auth_service_1 = require("./auth.service");
+const auth_controller_1 = require("./auth.controller");
+const user_entity_1 = require("../entities/user.entity");
+const auth_credentials_entity_1 = require("../entities/auth-credentials.entity");
+const auth_sessions_entity_1 = require("../entities/auth-sessions.entity");
+const auth_login_logs_entity_1 = require("../entities/auth-login-logs.entity");
+const password_reset_tokens_entity_1 = require("../entities/password-reset-tokens.entity");
+const jwt_1 = require("../jwt");
+const email_verification_1 = require("../email-verification");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
 exports.AuthModule = AuthModule = __decorate([
-    (0, common_1.Module)({})
+    (0, common_1.Module)({
+        imports: [
+            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, auth_credentials_entity_1.AuthCredentials, auth_sessions_entity_1.AuthSessions, auth_login_logs_entity_1.AuthLoginLogs, password_reset_tokens_entity_1.PasswordResetTokens]),
+            jwt_1.JwtModule,
+            email_verification_1.EmailVerificationModule,
+        ],
+        providers: [auth_service_1.AuthService],
+        controllers: [auth_controller_1.AuthController],
+        exports: [auth_service_1.AuthService],
+    })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map

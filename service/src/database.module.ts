@@ -9,7 +9,8 @@ import { ConfigService } from '@nestjs/config';
       useFactory: (config: ConfigService) => ({
         type: 'mysql',
         url: config.get<string>('DATABASE_URL'),
-        migrations: [__dirname + 'dist/migrations/*.js'],
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        migrations: [__dirname + '/migrations/*{.ts,.js}'],
         synchronize: false,
         migrationsRun: true,
       }),

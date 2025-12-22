@@ -8,5 +8,6 @@ async function bootstrap() {
     throw new Error('SERVICE_PORT is not defined in environment variables');
   }
   await app.listen(port);
+  console.log(`Service is running on port ${port}`);
 }
 bootstrap();

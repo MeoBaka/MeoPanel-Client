@@ -21,10 +21,10 @@ exports.DatabaseModule = DatabaseModule = __decorate([
                 useFactory: (config) => ({
                     type: 'mysql',
                     url: config.get('DATABASE_URL'),
-                    entities: [__dirname + '/entities/*.entity{.ts,.js}'],
+                    entities: [__dirname + '/**/*.entity{.ts,.js}'],
                     migrations: [__dirname + '/migrations/*{.ts,.js}'],
                     synchronize: false,
-                    migrationsRun: false,
+                    migrationsRun: true,
                 }),
             }),
         ],

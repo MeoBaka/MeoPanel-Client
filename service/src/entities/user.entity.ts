@@ -2,8 +2,8 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 
 @Entity('users')
 export class User {
-  @PrimaryGeneratedColumn({ type: 'bigint', unsigned: true })
-  id: number;
+  @PrimaryGeneratedColumn('uuid', { name: 'uuid' })
+  id: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   name: string;
@@ -11,17 +11,11 @@ export class User {
   @Column({ type: 'varchar', length: 255 })
   username: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255 })
   email: string;
 
-  @Column({ type: 'timestamp', nullable: true })
-  email_verified_at: Date;
-
-  @Column({ type: 'smallint', default: 0 })
-  status: number;
-
-  @Column({ type: 'int', default: 0 })
-  login_failed: number;
+  @Column({ type: 'timestamp', nullable: true, name: 'email_verified_at' })
+  emailVerifiedAt: Date;
 
   @CreateDateColumn({ type: 'timestamp', nullable: true })
   created_at: Date;
