@@ -1,14 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
-const fs_1 = require("fs");
+const dotenv_1 = require("dotenv");
+(0, dotenv_1.config)({ path: '../.env' });
 const typeorm_1 = require("typeorm");
 exports.default = new typeorm_1.DataSource({
-    type: 'postgres',
+    type: 'mysql',
     url: process.env.DATABASE_URL,
-    ssl: {
-        ca: (0, fs_1.readFileSync)('certs/ca.crt').toString(),
-    },
     entities: ['src/entities/*.ts'],
     migrations: ['src/migrations/*.ts'],
 });
