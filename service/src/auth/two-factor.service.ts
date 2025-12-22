@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as speakeasy from 'speakeasy';
+import * as qrcode from 'qrcode';
 import { TwoFactorAuth } from '../entities/two-factor-auth.entity';
 
 @Injectable()
@@ -71,10 +72,12 @@ export class TwoFactorService {
       await this.twoFactorAuthRepository.save(twoFactorAuth);
     }
 
+    // Generate base64 QR code
+    const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
+
+    // Only return QR code for scanning, don't leak secret or backup codes
     return {
-      secret,
-      otpauthUrl,
-      backupCodes,
+      qrCode: qrCodeDataUrl,
     };
   }
 
@@ -101,7 +104,13 @@ export class TwoFactorService {
     twoFactorAuth.isEnabled = 1;
     await this.twoFactorAuthRepository.save(twoFactorAuth);
 
-    return { message: 'Two-factor authentication enabled successfully' };
+    // Return backup codes after successful verification
+    const backupCodes = JSON.parse(twoFactorAuth.backupCodes);
+
+    return {
+      message: 'Two-factor authentication enabled successfully',
+      backupCodes,
+    };
   }
 
   async verifyTwoFactorCode(userId: string, token: string): Promise<boolean> {

@@ -219,13 +219,11 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
 - **Method**: POST
 - **URL**: `/auth/2fa/setup`
 - **Headers**: `Authorization: Bearer <access_token>`
-- **Notes**: Generates TOTP secret and backup codes. Returns QR code URL for authenticator app setup.
+- **Notes**: Generates TOTP secret and backup codes. Returns base64 QR code for easy display.
 - **Response**:
   ```json
   {
-    "secret": "JBSWY3DPEHPK3PXP",
-    "otpauthUrl": "otpauth://totp/MeoPanel:john@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MeoPanel",
-    "backupCodes": ["ABC123", "DEF456", "GHI789", ...]
+    "qrCode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
   }
   ```
 - **Status Codes**: 200 (OK), 400 (Bad Request - 2FA already enabled), 401 (Unauthorized)
@@ -240,11 +238,12 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
     "token": "123456"
   }
   ```
-- **Notes**: Verifies the TOTP token from authenticator app and enables 2FA.
+- **Notes**: Verifies the TOTP token from authenticator app and enables 2FA. Returns backup codes for secure storage.
 - **Response**:
   ```json
   {
-    "message": "Two-factor authentication enabled successfully"
+    "message": "Two-factor authentication enabled successfully",
+    "backupCodes": ["ABC123", "DEF456", "GHI789", "JKL012", "MNO345", "PQR678", "STU901", "VWX234", "YZA567", "BCD890"]
   }
   ```
 - **Status Codes**: 200 (OK), 400 (Bad Request), 401 (Unauthorized - Invalid token)
@@ -346,10 +345,10 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
 Two-factor authentication adds an extra layer of security by requiring a time-based one-time password (TOTP) from an authenticator app in addition to the password.
 
 ### 2FA Setup Process:
-1. User calls `/auth/2fa/setup` to get secret and QR code
+1. User calls `/auth/2fa/setup` to get QR code URL (secret not exposed)
 2. User scans QR code with authenticator app (Google Authenticator, Authy, etc.)
 3. User calls `/auth/2fa/verify` with first TOTP code to enable 2FA
-4. System stores 10 backup codes for recovery
+4. System enables 2FA and returns 10 backup codes for secure storage
 
 ### 2FA Login Process:
 1. User provides username/email and password
