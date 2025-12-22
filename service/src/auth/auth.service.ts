@@ -9,6 +9,7 @@ import { AuthLoginLogs } from '../entities/auth-login-logs.entity';
 import { PasswordResetTokens } from '../entities/password-reset-tokens.entity';
 import { JwtService } from '../jwt';
 import { EmailVerificationService } from '../email-verification/email-verification.service';
+import { TwoFactorService } from './two-factor.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -26,6 +27,7 @@ export class AuthService {
     @InjectRepository(PasswordResetTokens)
     private passwordResetTokensRepository: Repository<PasswordResetTokens>,
     private emailVerificationService: EmailVerificationService,
+    private twoFactorService: TwoFactorService,
   ) {}
 
   async register(registerDto: { username: string; email: string; password: string; name?: string }) {
@@ -60,8 +62,8 @@ export class AuthService {
     return { message: 'User registered successfully. Please check console for verification token.' };
   }
 
-  async login(loginDto: { usernameOrEmail: string; password: string }, ipAddress: string, userAgent: string) {
-    const { usernameOrEmail, password } = loginDto;
+  async login(loginDto: { usernameOrEmail: string; password: string; twoFactorCode?: string }, ipAddress: string, userAgent: string) {
+    const { usernameOrEmail, password, twoFactorCode } = loginDto;
 
     // Find credentials
     const credentials = await this.authCredentialsRepository.findOne({
@@ -76,6 +78,26 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check if 2FA is enabled
+    const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus(credentials.userId);
+
+    if (twoFactorStatus.isEnabled) {
+      // 2FA is enabled, require 2FA code
+      if (!twoFactorCode) {
+        return {
+          requiresTwoFactor: true,
+          userId: credentials.userId,
+          message: 'Two-factor authentication required',
+        };
+      }
+
+      // Verify 2FA code
+      const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode(credentials.userId, twoFactorCode);
+      if (!isTwoFactorValid) {
+        throw new UnauthorizedException('Invalid two-factor code');
+      }
     }
 
     // Generate tokens

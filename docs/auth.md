@@ -31,15 +31,23 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
 ### 2. Login
 - **Method**: POST
 - **URL**: `/auth/login`
-- **Request Body**:
+- **Request Body** (without 2FA):
   ```json
   {
     "usernameOrEmail": "johndoe",
     "password": "securepassword123"
   }
   ```
-- **Notes**: Can login with either `username` or `email`. Returns access and refresh tokens.
-- **Response**:
+- **Request Body** (with 2FA):
+  ```json
+  {
+    "usernameOrEmail": "johndoe",
+    "password": "securepassword123",
+    "twoFactorCode": "123456"
+  }
+  ```
+- **Notes**: Can login with either `username` or `email`. If 2FA is enabled, `twoFactorCode` is required. Returns access and refresh tokens, or requires 2FA verification.
+- **Response** (successful login):
   ```json
   {
     "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -54,7 +62,15 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
     }
   }
   ```
-- **Status Codes**: 200 (OK), 401 (Unauthorized - Invalid credentials)
+- **Response** (2FA required):
+  ```json
+  {
+    "requiresTwoFactor": true,
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "message": "Two-factor authentication required"
+  }
+  ```
+- **Status Codes**: 200 (OK), 401 (Unauthorized - Invalid credentials or 2FA code)
 
 ### 3. Refresh Access Token
 - **Method**: POST
@@ -199,7 +215,82 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
   ```
 - **Status Codes**: 200 (OK), 401 (Unauthorized - Invalid token)
 
-### 11. Get Current User Profile
+### 11. Setup Two-Factor Authentication
+- **Method**: POST
+- **URL**: `/auth/2fa/setup`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Notes**: Generates TOTP secret and backup codes. Returns QR code URL for authenticator app setup.
+- **Response**:
+  ```json
+  {
+    "secret": "JBSWY3DPEHPK3PXP",
+    "otpauthUrl": "otpauth://totp/MeoPanel:john@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MeoPanel",
+    "backupCodes": ["ABC123", "DEF456", "GHI789", ...]
+  }
+  ```
+- **Status Codes**: 200 (OK), 400 (Bad Request - 2FA already enabled), 401 (Unauthorized)
+
+### 12. Verify and Enable Two-Factor Authentication
+- **Method**: POST
+- **URL**: `/auth/2fa/verify`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Request Body**:
+  ```json
+  {
+    "token": "123456"
+  }
+  ```
+- **Notes**: Verifies the TOTP token from authenticator app and enables 2FA.
+- **Response**:
+  ```json
+  {
+    "message": "Two-factor authentication enabled successfully"
+  }
+  ```
+- **Status Codes**: 200 (OK), 400 (Bad Request), 401 (Unauthorized - Invalid token)
+
+### 13. Disable Two-Factor Authentication
+- **Method**: POST
+- **URL**: `/auth/2fa/disable`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Notes**: Disables 2FA and removes secret and backup codes.
+- **Response**:
+  ```json
+  {
+    "message": "Two-factor authentication disabled successfully"
+  }
+  ```
+- **Status Codes**: 200 (OK), 400 (Bad Request), 401 (Unauthorized)
+
+### 14. Regenerate Backup Codes
+- **Method**: POST
+- **URL**: `/auth/2fa/regenerate-backup`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Notes**: Generates new backup codes, replacing existing ones.
+- **Response**:
+  ```json
+  {
+    "backupCodes": ["XYZ789", "ABC123", "DEF456", ...]
+  }
+  ```
+- **Status Codes**: 200 (OK), 400 (Bad Request - 2FA not enabled), 401 (Unauthorized)
+
+### 15. Get Two-Factor Authentication Status
+- **Method**: POST
+- **URL**: `/auth/2fa/status`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Notes**: Returns the current 2FA status for the user.
+- **Response**:
+  ```json
+  {
+    "isEnabled": true,
+    "isSetup": true,
+    "backupCodesCount": 8
+  }
+  ```
+- **Status Codes**: 200 (OK), 401 (Unauthorized)
+
+### 16. Get Current User Profile
 - **Method**: POST
 - **URL**: `/auth/me`
 - **Headers**: `Authorization: Bearer <access_token>`
@@ -238,12 +329,45 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
 2. **Email Verification**: User verifies email using the token from registration
    - `email_verified_at` timestamp is set
    - Verification token is deleted
-3. **Login**: User logs in and receives access + refresh tokens
-   - Only verified users can log in (can be modified based on requirements)
-4. **API Access**: Include access token in Authorization header
-5. **Token Refresh**: When access token expires, use refresh token to get new tokens
-6. **Password Management**: User can reset forgotten passwords or change current password
-7. **Logout**: Invalidate refresh tokens to prevent further token refresh
+3. **Two-Factor Authentication Setup** (Optional): User can enable 2FA
+   - Generate TOTP secret and backup codes
+   - Scan QR code with authenticator app
+   - Verify setup with initial TOTP code
+4. **Login**: User logs in with username/password
+   - If 2FA enabled, additional TOTP code or backup code required
+   - Returns access and refresh tokens upon successful authentication
+5. **API Access**: Include access token in Authorization header
+6. **Token Refresh**: When access token expires, use refresh token to get new tokens
+7. **Password Management**: User can reset forgotten passwords or change current password
+8. **Logout**: Invalidate refresh tokens to prevent further token refresh
+
+## Two-Factor Authentication (2FA)
+
+Two-factor authentication adds an extra layer of security by requiring a time-based one-time password (TOTP) from an authenticator app in addition to the password.
+
+### 2FA Setup Process:
+1. User calls `/auth/2fa/setup` to get secret and QR code
+2. User scans QR code with authenticator app (Google Authenticator, Authy, etc.)
+3. User calls `/auth/2fa/verify` with first TOTP code to enable 2FA
+4. System stores 10 backup codes for recovery
+
+### 2FA Login Process:
+1. User provides username/email and password
+2. If 2FA enabled, system responds with `requiresTwoFactor: true`
+3. User provides TOTP code from authenticator app
+4. System verifies code and completes login
+
+### Backup Codes:
+- 10 single-use codes generated during setup
+- Can be used instead of TOTP when authenticator is unavailable
+- Each code is removed after use
+- Can be regenerated with `/auth/2fa/regenerate-backup`
+
+### Security Benefits:
+- Protects against password breaches
+- Requires physical access to authenticator device
+- Backup codes provide recovery option
+- TOTP codes expire every 30 seconds
 
 ## Password Management Flow
 

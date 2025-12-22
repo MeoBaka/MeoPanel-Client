@@ -1,10 +1,14 @@
 import { Controller, Post, Body, Request, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { TwoFactorService } from './two-factor.service';
 import { JwtAuthGuard } from '../jwt';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly twoFactorService: TwoFactorService,
+  ) {}
 
   @Post('register')
   async register(@Body() body: { username: string; email: string; password: string; name?: string }) {
@@ -52,6 +56,36 @@ export class AuthController {
   @Post('logout-all')
   async logoutAll(@Request() req) {
     return this.authService.logoutAll(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/setup')
+  async setupTwoFactor(@Request() req) {
+    return this.twoFactorService.setupTwoFactor(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/verify')
+  async verifyTwoFactor(@Request() req, @Body() body: { token: string }) {
+    return this.twoFactorService.verifyAndEnableTwoFactor(req.user.id, body.token);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/disable')
+  async disableTwoFactor(@Request() req) {
+    return this.twoFactorService.disableTwoFactor(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/regenerate-backup')
+  async regenerateBackupCodes(@Request() req) {
+    return this.twoFactorService.regenerateBackupCodes(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('2fa/status')
+  async getTwoFactorStatus(@Request() req) {
+    return this.twoFactorService.getTwoFactorStatus(req.user.id);
   }
 
 }
