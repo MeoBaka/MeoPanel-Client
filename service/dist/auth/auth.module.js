@@ -16,7 +16,7 @@ const auth_credentials_entity_1 = require("../entities/auth-credentials.entity")
 const auth_sessions_entity_1 = require("../entities/auth-sessions.entity");
 const auth_login_logs_entity_1 = require("../entities/auth-login-logs.entity");
 const password_reset_tokens_entity_1 = require("../entities/password-reset-tokens.entity");
-const two_factor_auth_entity_1 = require("../entities/two-factor-auth.entity");
+const twofa_auth_entity_1 = require("../entities/twofa-auth.entity");
 const jwt_1 = require("../jwt");
 const email_verification_1 = require("../email-verification");
 const audit_module_1 = require("../audit/audit.module");
@@ -28,7 +28,7 @@ exports.AuthModule = AuthModule;
 exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, auth_credentials_entity_1.AuthCredentials, auth_sessions_entity_1.AuthSessions, auth_login_logs_entity_1.AuthLoginLogs, password_reset_tokens_entity_1.PasswordResetTokens, two_factor_auth_entity_1.TwoFactorAuth]),
+            typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, auth_credentials_entity_1.AuthCredentials, auth_sessions_entity_1.AuthSessions, auth_login_logs_entity_1.AuthLoginLogs, password_reset_tokens_entity_1.PasswordResetTokens, twofa_auth_entity_1.TwofaAuth]),
             jwt_1.JwtModule,
             email_verification_1.EmailVerificationModule,
             audit_module_1.AuditModule,

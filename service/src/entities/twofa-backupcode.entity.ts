@@ -1,8 +1,8 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
 
-@Entity('two_factor_auth')
-export class TwoFactorAuth {
+@Entity('twofa_backupcode')
+export class TwofaBackupCode {
   @PrimaryGeneratedColumn('uuid', { name: 'id' })
   id: string;
 
@@ -13,14 +13,11 @@ export class TwoFactorAuth {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ type: 'varchar', length: 255, name: 'secret' })
-  secret: string; // TOTP secret key
+  @Column({ type: 'varchar', length: 255, name: 'code_hash' })
+  codeHash: string; // Hashed backup code for security
 
-  @Column({ type: 'tinyint', default: 0, name: 'is_enabled' })
-  isEnabled: number; // 0 = disabled, 1 = enabled
-
-  @Column({ type: 'varchar', length: 255, nullable: true, name: 'backup_codes' })
-  backupCodes: string; // JSON string of backup codes
+  @Column({ type: 'tinyint', default: 0, name: 'is_used' })
+  isUsed: number; // 0 = not used, 1 = used
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;

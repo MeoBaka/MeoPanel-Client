@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import ConfirmDialog from './ConfirmDialog'
 
 export default function TwoFactorSetup() {
   const [twoFactorStatus, setTwoFactorStatus] = useState<any>(null)
@@ -12,6 +13,7 @@ export default function TwoFactorSetup() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [showBackupCodes, setShowBackupCodes] = useState(false)
+  const [showDisableConfirm, setShowDisableConfirm] = useState(false)
 
   const {
     setupTwoFactor,
@@ -71,11 +73,12 @@ export default function TwoFactorSetup() {
     }
   }
 
-  const handleDisable = async () => {
-    if (!confirm('Are you sure you want to disable two-factor authentication? This will make your account less secure.')) {
-      return
-    }
+  const handleDisable = () => {
+    setShowDisableConfirm(true)
+  }
 
+  const confirmDisable = async () => {
+    setShowDisableConfirm(false)
     setIsLoading(true)
     setError('')
     setSuccess('')
@@ -92,6 +95,10 @@ export default function TwoFactorSetup() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const cancelDisable = () => {
+    setShowDisableConfirm(false)
   }
 
   const handleRegenerateBackupCodes = async () => {
@@ -112,22 +119,22 @@ export default function TwoFactorSetup() {
   }
 
   if (!twoFactorStatus) {
-    return <div className="text-center">Loading...</div>
+    return <div className="text-center text-gray-400">Loading...</div>
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+      <div className="bg-gray-800 border border-gray-700 overflow-hidden sm:rounded-lg">
         <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+          <h3 className="text-lg leading-6 font-medium text-white mb-4">
             Two-Factor Authentication
           </h3>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-medium text-gray-900">Status</h4>
-                <p className="text-sm text-gray-500">
+                <h4 className="text-sm font-medium text-white">Status</h4>
+                <p className="text-sm text-gray-400">
                   {twoFactorStatus.isEnabled ? 'Enabled' : 'Disabled'}
                   {twoFactorStatus.isSetup && !twoFactorStatus.isEnabled && ' (Setup in progress)'}
                 </p>
@@ -137,7 +144,7 @@ export default function TwoFactorSetup() {
                   <button
                     onClick={handleSetup}
                     disabled={isLoading}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50 transition-colors"
                   >
                     {isLoading ? 'Setting up...' : 'Setup 2FA'}
                   </button>
@@ -147,14 +154,14 @@ export default function TwoFactorSetup() {
                     <button
                       onClick={handleRegenerateBackupCodes}
                       disabled={isLoading}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50 transition-colors"
                     >
                       {isLoading ? 'Regenerating...' : 'New Backup Codes'}
                     </button>
                     <button
                       onClick={handleDisable}
                       disabled={isLoading}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50 transition-colors"
                     >
                       {isLoading ? 'Disabling...' : 'Disable 2FA'}
                     </button>
@@ -164,20 +171,20 @@ export default function TwoFactorSetup() {
             </div>
 
             {qrCode && (
-              <div className="border rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">
+              <div className="border border-gray-600 rounded-lg p-4 bg-gray-700">
+                <h4 className="text-sm font-medium text-white mb-2">
                   Scan QR Code
                 </h4>
                 <div className="flex justify-center mb-4">
                   <img src={qrCode} alt="QR Code" className="max-w-xs" />
                 </div>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-300 mb-4">
                   Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                 </p>
 
                 <form onSubmit={handleVerify} className="space-y-4">
                   <div>
-                    <label htmlFor="code" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="code" className="block text-sm font-medium text-gray-300">
                       Enter verification code
                     </label>
                     <input
@@ -186,7 +193,7 @@ export default function TwoFactorSetup() {
                       required
                       value={verificationCode}
                       onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-center text-lg"
+                      className="mt-1 block w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-lg transition-colors"
                       placeholder="000000"
                       maxLength={6}
                     />
@@ -194,7 +201,7 @@ export default function TwoFactorSetup() {
                   <button
                     type="submit"
                     disabled={isLoading || verificationCode.length !== 6}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50"
+                    className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm disabled:opacity-50 transition-colors"
                   >
                     {isLoading ? 'Verifying...' : 'Verify & Enable 2FA'}
                   </button>
@@ -203,24 +210,24 @@ export default function TwoFactorSetup() {
             )}
 
             {showBackupCodes && backupCodes.length > 0 && (
-              <div className="border rounded-lg p-4 bg-yellow-50">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">
+              <div className="border border-yellow-600 rounded-lg p-4 bg-yellow-900 bg-opacity-20">
+                <h4 className="text-sm font-medium text-yellow-200 mb-2">
                   ⚠️ Save Your Backup Codes
                 </h4>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-yellow-300 mb-4">
                   These codes can be used to access your account if you lose your authenticator device.
                   Save them in a secure place.
                 </p>
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   {backupCodes.map((code, index) => (
-                    <div key={index} className="bg-white p-2 rounded border text-center font-mono text-sm">
+                    <div key={index} className="bg-gray-700 p-2 rounded border border-gray-600 text-center font-mono text-sm text-white">
                       {code}
                     </div>
                   ))}
                 </div>
                 <button
                   onClick={() => setShowBackupCodes(false)}
-                  className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm"
+                  className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm transition-colors"
                 >
                   I've Saved These Codes
                 </button>
@@ -228,11 +235,11 @@ export default function TwoFactorSetup() {
             )}
 
             {twoFactorStatus.isEnabled && (
-              <div className="border rounded-lg p-4 bg-green-50">
-                <h4 className="text-sm font-medium text-green-900 mb-2">
+              <div className="border border-green-600 rounded-lg p-4 bg-green-900 bg-opacity-20">
+                <h4 className="text-sm font-medium text-green-200 mb-2">
                   ✅ Two-Factor Authentication is Enabled
                 </h4>
-                <p className="text-sm text-green-700">
+                <p className="text-sm text-green-300">
                   Your account is now protected with two-factor authentication.
                   You have {twoFactorStatus.backupCodesCount} backup codes remaining.
                 </p>
@@ -240,15 +247,25 @@ export default function TwoFactorSetup() {
             )}
 
             {error && (
-              <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{error}</div>
+              <div className="text-red-400 text-sm bg-red-900 bg-opacity-20 border border-red-600 p-3 rounded">{error}</div>
             )}
 
             {success && (
-              <div className="text-green-600 text-sm bg-green-50 p-3 rounded">{success}</div>
+              <div className="text-green-400 text-sm bg-green-900 bg-opacity-20 border border-green-600 p-3 rounded">{success}</div>
             )}
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDisableConfirm}
+        title="Disable Two-Factor Authentication"
+        message="Are you sure you want to disable two-factor authentication? This will make your account less secure."
+        confirmText="Disable 2FA"
+        cancelText="Cancel"
+        onConfirm={confirmDisable}
+        onCancel={cancelDisable}
+      />
     </div>
   )
 }

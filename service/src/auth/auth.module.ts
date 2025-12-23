@@ -7,7 +7,7 @@ import { AuthCredentials } from '../entities/auth-credentials.entity';
 import { AuthSessions } from '../entities/auth-sessions.entity';
 import { AuthLoginLogs } from '../entities/auth-login-logs.entity';
 import { PasswordResetTokens } from '../entities/password-reset-tokens.entity';
-import { TwoFactorAuth } from '../entities/two-factor-auth.entity';
+import { TwofaAuth } from '../entities/twofa-auth.entity';
 import { JwtModule } from '../jwt';
 import { EmailVerificationModule } from '../email-verification';
 import { AuditModule } from '../audit/audit.module';
@@ -16,7 +16,7 @@ import { SecurityService, RolesGuard } from './security.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, AuthCredentials, AuthSessions, AuthLoginLogs, PasswordResetTokens, TwoFactorAuth]),
+    TypeOrmModule.forFeature([User, AuthCredentials, AuthSessions, AuthLoginLogs, PasswordResetTokens, TwofaAuth]),
     JwtModule,
     EmailVerificationModule,
     AuditModule,

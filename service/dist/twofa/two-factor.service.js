@@ -18,17 +18,27 @@ const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const speakeasy = require("speakeasy");
 const qrcode = require("qrcode");
-const two_factor_auth_entity_1 = require("../entities/two-factor-auth.entity");
+const bcrypt = require("bcrypt");
+const twofa_auth_entity_1 = require("../entities/twofa-auth.entity");
+const twofa_backupcode_entity_1 = require("../entities/twofa-backupcode.entity");
+const user_entity_1 = require("../entities/user.entity");
 const audit_service_1 = require("../audit/audit.service");
 let TwoFactorService = class TwoFactorService {
-    constructor(twoFactorAuthRepository, auditService) {
-        this.twoFactorAuthRepository = twoFactorAuthRepository;
+    constructor(twofaAuthRepository, twofaBackupCodeRepository, userRepository, auditService) {
+        this.twofaAuthRepository = twofaAuthRepository;
+        this.twofaBackupCodeRepository = twofaBackupCodeRepository;
+        this.userRepository = userRepository;
         this.auditService = auditService;
     }
-    generateSecret() {
+    async generateSecret(userId) {
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+        if (!user) {
+            throw new common_1.BadRequestException('User not found');
+        }
+        const accountName = `MeoPanel: ${user.email} (${user.username})`;
         const secret = speakeasy.generateSecret({
-            name: 'MeoPanel',
-            issuer: 'MeoPanel Auth',
+            name: accountName,
+            issuer: 'MeoPanel',
         });
         return {
             secret: secret.base32,
@@ -51,28 +61,36 @@ let TwoFactorService = class TwoFactorService {
         });
     }
     async setupTwoFactor(userId) {
-        const existing = await this.twoFactorAuthRepository.findOne({
+        const existing = await this.twofaAuthRepository.findOne({
             where: { userId },
         });
         if (existing && existing.isEnabled) {
             throw new common_1.BadRequestException('Two-factor authentication is already enabled');
         }
-        const { secret, otpauthUrl } = this.generateSecret();
+        const { secret, otpauthUrl } = await this.generateSecret(userId);
         const backupCodes = this.generateBackupCodes();
+        await this.twofaBackupCodeRepository.delete({ userId });
+        const hashedCodes = await Promise.all(backupCodes.map(code => bcrypt.hash(code, 10)));
+        const backupCodeEntities = hashedCodes.map(hash => this.twofaBackupCodeRepository.create({
+            userId,
+            codeHash: hash,
+            isUsed: 0,
+        }));
+        await this.twofaBackupCodeRepository.save(backupCodeEntities);
         if (existing) {
             existing.secret = secret;
-            existing.backupCodes = JSON.stringify(backupCodes);
+            existing.backupCodes = '';
             existing.isEnabled = 0;
-            await this.twoFactorAuthRepository.save(existing);
+            await this.twofaAuthRepository.save(existing);
         }
         else {
-            const twoFactorAuth = this.twoFactorAuthRepository.create({
+            const twoFactorAuth = this.twofaAuthRepository.create({
                 userId,
                 secret,
-                backupCodes: JSON.stringify(backupCodes),
+                backupCodes: '',
                 isEnabled: 0,
             });
-            await this.twoFactorAuthRepository.save(twoFactorAuth);
+            await this.twofaAuthRepository.save(twoFactorAuth);
         }
         const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
         await this.auditService.logTwoFASetup(userId);
@@ -81,7 +99,7 @@ let TwoFactorService = class TwoFactorService {
         };
     }
     async verifyAndEnableTwoFactor(userId, token) {
-        const twoFactorAuth = await this.twoFactorAuthRepository.findOne({
+        const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId },
         });
         if (!twoFactorAuth) {
@@ -95,16 +113,24 @@ let TwoFactorService = class TwoFactorService {
             throw new common_1.UnauthorizedException('Invalid verification token');
         }
         twoFactorAuth.isEnabled = 1;
-        await this.twoFactorAuthRepository.save(twoFactorAuth);
+        await this.twofaAuthRepository.save(twoFactorAuth);
         await this.auditService.logTwoFAEnabled(userId);
-        const backupCodes = JSON.parse(twoFactorAuth.backupCodes);
+        const backupCodes = this.generateBackupCodes();
+        await this.twofaBackupCodeRepository.delete({ userId });
+        const hashedCodes = await Promise.all(backupCodes.map(code => bcrypt.hash(code, 10)));
+        const backupCodeEntities = hashedCodes.map(hash => this.twofaBackupCodeRepository.create({
+            userId,
+            codeHash: hash,
+            isUsed: 0,
+        }));
+        await this.twofaBackupCodeRepository.save(backupCodeEntities);
         return {
             message: 'Two-factor authentication enabled successfully',
             backupCodes,
         };
     }
     async verifyTwoFactorCode(userId, token) {
-        const twoFactorAuth = await this.twoFactorAuthRepository.findOne({
+        const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId, isEnabled: 1 },
         });
         if (!twoFactorAuth) {
@@ -113,19 +139,22 @@ let TwoFactorService = class TwoFactorService {
         if (this.verifyToken(twoFactorAuth.secret, token)) {
             return true;
         }
-        const backupCodes = JSON.parse(twoFactorAuth.backupCodes || '[]');
-        const codeIndex = backupCodes.indexOf(token);
-        if (codeIndex !== -1) {
-            backupCodes.splice(codeIndex, 1);
-            twoFactorAuth.backupCodes = JSON.stringify(backupCodes);
-            await this.twoFactorAuthRepository.save(twoFactorAuth);
-            await this.auditService.logTwoFABackupUsed(userId);
-            return true;
+        const backupCodes = await this.twofaBackupCodeRepository.find({
+            where: { userId, isUsed: 0 },
+        });
+        for (const backupCode of backupCodes) {
+            const isMatch = await bcrypt.compare(token, backupCode.codeHash);
+            if (isMatch) {
+                backupCode.isUsed = 1;
+                await this.twofaBackupCodeRepository.save(backupCode);
+                await this.auditService.logTwoFABackupUsed(userId);
+                return true;
+            }
         }
         return false;
     }
     async disableTwoFactor(userId) {
-        const twoFactorAuth = await this.twoFactorAuthRepository.findOne({
+        const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId },
         });
         if (!twoFactorAuth) {
@@ -134,41 +163,55 @@ let TwoFactorService = class TwoFactorService {
         twoFactorAuth.isEnabled = 0;
         twoFactorAuth.secret = '';
         twoFactorAuth.backupCodes = '';
-        await this.twoFactorAuthRepository.save(twoFactorAuth);
+        await this.twofaAuthRepository.save(twoFactorAuth);
+        await this.twofaBackupCodeRepository.delete({ userId });
         await this.auditService.logTwoFADisabled(userId);
         return { message: 'Two-factor authentication disabled successfully' };
     }
     async regenerateBackupCodes(userId) {
-        const twoFactorAuth = await this.twoFactorAuthRepository.findOne({
+        const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId, isEnabled: 1 },
         });
         if (!twoFactorAuth) {
             throw new common_1.BadRequestException('Two-factor authentication not enabled');
         }
         const backupCodes = this.generateBackupCodes();
-        twoFactorAuth.backupCodes = JSON.stringify(backupCodes);
-        await this.twoFactorAuthRepository.save(twoFactorAuth);
+        await this.twofaBackupCodeRepository.delete({ userId });
+        const hashedCodes = await Promise.all(backupCodes.map(code => bcrypt.hash(code, 10)));
+        const backupCodeEntities = hashedCodes.map(hash => this.twofaBackupCodeRepository.create({
+            userId,
+            codeHash: hash,
+            isUsed: 0,
+        }));
+        await this.twofaBackupCodeRepository.save(backupCodeEntities);
         return { backupCodes };
     }
     async getTwoFactorStatus(userId) {
-        const twoFactorAuth = await this.twoFactorAuthRepository.findOne({
+        const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId },
         });
         if (!twoFactorAuth) {
             return { isEnabled: false, isSetup: false };
         }
+        const backupCodesCount = await this.twofaBackupCodeRepository.count({
+            where: { userId, isUsed: 0 },
+        });
         return {
             isEnabled: twoFactorAuth.isEnabled === 1,
             isSetup: true,
-            backupCodesCount: JSON.parse(twoFactorAuth.backupCodes || '[]').length,
+            backupCodesCount,
         };
     }
 };
 exports.TwoFactorService = TwoFactorService;
 exports.TwoFactorService = TwoFactorService = __decorate([
     (0, common_1.Injectable)(),
-    __param(0, (0, typeorm_1.InjectRepository)(two_factor_auth_entity_1.TwoFactorAuth)),
+    __param(0, (0, typeorm_1.InjectRepository)(twofa_auth_entity_1.TwofaAuth)),
+    __param(1, (0, typeorm_1.InjectRepository)(twofa_backupcode_entity_1.TwofaBackupCode)),
+    __param(2, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
+        typeorm_2.Repository,
         audit_service_1.AuditService])
 ], TwoFactorService);
 //# sourceMappingURL=two-factor.service.js.map
