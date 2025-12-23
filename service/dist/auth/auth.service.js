@@ -24,9 +24,10 @@ const auth_login_logs_entity_1 = require("../entities/auth-login-logs.entity");
 const password_reset_tokens_entity_1 = require("../entities/password-reset-tokens.entity");
 const jwt_1 = require("../jwt");
 const email_verification_service_1 = require("../email-verification/email-verification.service");
+const two_factor_service_1 = require("./two-factor.service");
 const crypto = require("crypto");
 let AuthService = class AuthService {
-    constructor(jwtService, userRepository, authCredentialsRepository, authSessionsRepository, authLoginLogsRepository, passwordResetTokensRepository, emailVerificationService) {
+    constructor(jwtService, userRepository, authCredentialsRepository, authSessionsRepository, authLoginLogsRepository, passwordResetTokensRepository, emailVerificationService, twoFactorService) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.authCredentialsRepository = authCredentialsRepository;
@@ -34,6 +35,7 @@ let AuthService = class AuthService {
         this.authLoginLogsRepository = authLoginLogsRepository;
         this.passwordResetTokensRepository = passwordResetTokensRepository;
         this.emailVerificationService = emailVerificationService;
+        this.twoFactorService = twoFactorService;
     }
     async register(registerDto) {
         const { username, email, password, name } = registerDto;
@@ -56,7 +58,7 @@ let AuthService = class AuthService {
         return { message: 'User registered successfully. Please check console for verification token.' };
     }
     async login(loginDto, ipAddress, userAgent) {
-        const { usernameOrEmail, password } = loginDto;
+        const { usernameOrEmail, password, twoFactorCode } = loginDto;
         const credentials = await this.authCredentialsRepository.findOne({
             where: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
             relations: ['user'],
@@ -67,6 +69,20 @@ let AuthService = class AuthService {
         const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
         if (!isPasswordValid) {
             throw new common_1.UnauthorizedException('Invalid credentials');
+        }
+        const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus(credentials.userId);
+        if (twoFactorStatus.isEnabled) {
+            if (!twoFactorCode) {
+                return {
+                    requiresTwoFactor: true,
+                    userId: credentials.userId,
+                    message: 'Two-factor authentication required',
+                };
+            }
+            const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode(credentials.userId, twoFactorCode);
+            if (!isTwoFactorValid) {
+                throw new common_1.UnauthorizedException('Invalid two-factor code');
+            }
         }
         const payload = { sub: credentials.userId, username: credentials.username };
         const accessToken = this.jwtService.generateAccessToken(payload);
@@ -213,6 +229,7 @@ exports.AuthService = AuthService = __decorate([
         typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
-        email_verification_service_1.EmailVerificationService])
+        email_verification_service_1.EmailVerificationService,
+        two_factor_service_1.TwoFactorService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

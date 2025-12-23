@@ -15,11 +15,10 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
   {
     "username": "johndoe",
     "email": "john@example.com",
-    "password": "securepassword123",
-    "name": "John Doe"
+    "password": "securepassword123"
   }
   ```
-- **Notes**: `username`, `email`, and `password` are required. `name` is optional. Password will be hashed before storage.
+- **Notes**: `username`, `email`, and `password` are required. Password will be hashed before storage.
 - **Response**:
   ```json
   {

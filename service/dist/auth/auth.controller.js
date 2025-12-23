@@ -15,10 +15,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
+const two_factor_service_1 = require("./two-factor.service");
 const jwt_1 = require("../jwt");
 let AuthController = class AuthController {
-    constructor(authService) {
+    constructor(authService, twoFactorService) {
         this.authService = authService;
+        this.twoFactorService = twoFactorService;
     }
     async register(body) {
         return this.authService.register(body);
@@ -46,6 +48,21 @@ let AuthController = class AuthController {
     }
     async logoutAll(req) {
         return this.authService.logoutAll(req.user.id);
+    }
+    async setupTwoFactor(req) {
+        return this.twoFactorService.setupTwoFactor(req.user.id);
+    }
+    async verifyTwoFactor(req, body) {
+        return this.twoFactorService.verifyAndEnableTwoFactor(req.user.id, body.token);
+    }
+    async disableTwoFactor(req) {
+        return this.twoFactorService.disableTwoFactor(req.user.id);
+    }
+    async regenerateBackupCodes(req) {
+        return this.twoFactorService.regenerateBackupCodes(req.user.id);
+    }
+    async getTwoFactorStatus(req) {
+        return this.twoFactorService.getTwoFactorStatus(req.user.id);
     }
 };
 exports.AuthController = AuthController;
@@ -117,8 +134,50 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logoutAll", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
+    (0, common_1.Post)('2fa/setup'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "setupTwoFactor", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
+    (0, common_1.Post)('2fa/verify'),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "verifyTwoFactor", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
+    (0, common_1.Post)('2fa/disable'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "disableTwoFactor", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
+    (0, common_1.Post)('2fa/regenerate-backup'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "regenerateBackupCodes", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
+    (0, common_1.Post)('2fa/status'),
+    __param(0, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "getTwoFactorStatus", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService])
+    __metadata("design:paramtypes", [auth_service_1.AuthService,
+        two_factor_service_1.TwoFactorService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

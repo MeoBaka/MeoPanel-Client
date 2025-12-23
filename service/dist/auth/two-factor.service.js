@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const speakeasy = require("speakeasy");
+const qrcode = require("qrcode");
 const two_factor_auth_entity_1 = require("../entities/two-factor-auth.entity");
 let TwoFactorService = class TwoFactorService {
     constructor(twoFactorAuthRepository) {
@@ -71,10 +72,9 @@ let TwoFactorService = class TwoFactorService {
             });
             await this.twoFactorAuthRepository.save(twoFactorAuth);
         }
+        const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
         return {
-            secret,
-            otpauthUrl,
-            backupCodes,
+            qrCode: qrCodeDataUrl,
         };
     }
     async verifyAndEnableTwoFactor(userId, token) {
@@ -93,7 +93,11 @@ let TwoFactorService = class TwoFactorService {
         }
         twoFactorAuth.isEnabled = 1;
         await this.twoFactorAuthRepository.save(twoFactorAuth);
-        return { message: 'Two-factor authentication enabled successfully' };
+        const backupCodes = JSON.parse(twoFactorAuth.backupCodes);
+        return {
+            message: 'Two-factor authentication enabled successfully',
+            backupCodes,
+        };
     }
     async verifyTwoFactorCode(userId, token) {
         const twoFactorAuth = await this.twoFactorAuthRepository.findOne({
