@@ -19,10 +19,12 @@ const typeorm_2 = require("typeorm");
 const crypto = require("crypto");
 const user_entity_1 = require("../entities/user.entity");
 const email_verification_tokens_entity_1 = require("../entities/email-verification-tokens.entity");
+const audit_service_1 = require("../audit/audit.service");
 let EmailVerificationService = class EmailVerificationService {
-    constructor(userRepository, emailVerificationTokensRepository) {
+    constructor(userRepository, emailVerificationTokensRepository, auditService) {
         this.userRepository = userRepository;
         this.emailVerificationTokensRepository = emailVerificationTokensRepository;
+        this.auditService = auditService;
     }
     async generateVerificationToken(userId, email) {
         await this.emailVerificationTokensRepository.delete({ userId });
@@ -36,6 +38,7 @@ let EmailVerificationService = class EmailVerificationService {
         });
         await this.emailVerificationTokensRepository.save(emailToken);
         console.log(`Email verification token for ${email}: ${verificationToken}`);
+        await this.auditService.logEmailVerificationSent(userId, email);
         return verificationToken;
     }
     async verifyEmail(token) {
@@ -53,6 +56,7 @@ let EmailVerificationService = class EmailVerificationService {
         await this.userRepository.save(verificationToken.user);
         await this.emailVerificationTokensRepository.delete(verificationToken.id);
         console.log(`Email verified for user: ${verificationToken.user.email}`);
+        await this.auditService.logEmailVerified(verificationToken.userId, verificationToken.user.email);
         return { message: 'Email verified successfully' };
     }
     async resendVerification(email) {
@@ -73,6 +77,7 @@ exports.EmailVerificationService = EmailVerificationService = __decorate([
     __param(0, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
     __param(1, (0, typeorm_1.InjectRepository)(email_verification_tokens_entity_1.EmailVerificationTokens)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
-        typeorm_2.Repository])
+        typeorm_2.Repository,
+        audit_service_1.AuditService])
 ], EmailVerificationService);
 //# sourceMappingURL=email-verification.service.js.map

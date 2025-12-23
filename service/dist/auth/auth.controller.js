@@ -15,8 +15,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
-const two_factor_service_1 = require("./two-factor.service");
+const two_factor_service_1 = require("../twofa/two-factor.service");
 const jwt_1 = require("../jwt");
+const security_service_1 = require("./security.service");
+const user_entity_1 = require("../entities/user.entity");
 let AuthController = class AuthController {
     constructor(authService, twoFactorService) {
         this.authService = authService;
@@ -41,10 +43,10 @@ let AuthController = class AuthController {
         return this.authService.resetPassword(body.token, body.newPassword);
     }
     async changePassword(req, body) {
-        return this.authService.changePassword(req.user.id, body.currentPassword, body.newPassword);
+        return this.authService.changePassword(req.user.id, body.currentPassword, body.newPassword, req.ip, req.get('User-Agent'));
     }
-    async logout(body) {
-        return this.authService.logout(body.refreshToken);
+    async logout(body, req) {
+        return this.authService.logout(body.refreshToken, req.ip, req.get('User-Agent'));
     }
     async logoutAll(req) {
         return this.authService.logoutAll(req.user.id);
@@ -63,6 +65,9 @@ let AuthController = class AuthController {
     }
     async getTwoFactorStatus(req) {
         return this.twoFactorService.getTwoFactorStatus(req.user.id);
+    }
+    async getAllUsers() {
+        return this.authService.getAllUsers();
     }
 };
 exports.AuthController = AuthController;
@@ -122,8 +127,9 @@ __decorate([
 __decorate([
     (0, common_1.Post)('logout'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logout", null);
 __decorate([
@@ -175,6 +181,14 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "getTwoFactorStatus", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard, security_service_1.RolesGuard),
+    (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
+    (0, common_1.Get)('users'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "getAllUsers", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService,

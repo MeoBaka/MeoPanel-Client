@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import * as speakeasy from 'speakeasy';
 import * as qrcode from 'qrcode';
 import { TwoFactorAuth } from '../entities/two-factor-auth.entity';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class TwoFactorService {
   constructor(
     @InjectRepository(TwoFactorAuth)
     private twoFactorAuthRepository: Repository<TwoFactorAuth>,
+    private auditService: AuditService,
   ) {}
 
   generateSecret(): { secret: string; otpauthUrl: string } {
@@ -75,6 +77,9 @@ export class TwoFactorService {
     // Generate base64 QR code
     const qrCodeDataUrl = await qrcode.toDataURL(otpauthUrl);
 
+    // Audit log 2FA setup
+    await this.auditService.logTwoFASetup(userId);
+
     // Only return QR code for scanning, don't leak secret or backup codes
     return {
       qrCode: qrCodeDataUrl,
@@ -103,6 +108,9 @@ export class TwoFactorService {
     // Enable 2FA
     twoFactorAuth.isEnabled = 1;
     await this.twoFactorAuthRepository.save(twoFactorAuth);
+
+    // Audit log 2FA enabled
+    await this.auditService.logTwoFAEnabled(userId);
 
     // Return backup codes after successful verification
     const backupCodes = JSON.parse(twoFactorAuth.backupCodes);
@@ -136,6 +144,10 @@ export class TwoFactorService {
       backupCodes.splice(codeIndex, 1);
       twoFactorAuth.backupCodes = JSON.stringify(backupCodes);
       await this.twoFactorAuthRepository.save(twoFactorAuth);
+
+      // Audit log backup code used
+      await this.auditService.logTwoFABackupUsed(userId);
+
       return true;
     }
 
@@ -156,6 +168,9 @@ export class TwoFactorService {
     twoFactorAuth.secret = '';
     twoFactorAuth.backupCodes = '';
     await this.twoFactorAuthRepository.save(twoFactorAuth);
+
+    // Audit log 2FA disabled
+    await this.auditService.logTwoFADisabled(userId);
 
     return { message: 'Two-factor authentication disabled successfully' };
   }

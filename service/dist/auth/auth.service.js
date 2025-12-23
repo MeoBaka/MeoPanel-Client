@@ -24,10 +24,12 @@ const auth_login_logs_entity_1 = require("../entities/auth-login-logs.entity");
 const password_reset_tokens_entity_1 = require("../entities/password-reset-tokens.entity");
 const jwt_1 = require("../jwt");
 const email_verification_service_1 = require("../email-verification/email-verification.service");
-const two_factor_service_1 = require("./two-factor.service");
+const two_factor_service_1 = require("../twofa/two-factor.service");
+const audit_service_1 = require("../audit/audit.service");
+const security_service_1 = require("./security.service");
 const crypto = require("crypto");
 let AuthService = class AuthService {
-    constructor(jwtService, userRepository, authCredentialsRepository, authSessionsRepository, authLoginLogsRepository, passwordResetTokensRepository, emailVerificationService, twoFactorService) {
+    constructor(jwtService, userRepository, authCredentialsRepository, authSessionsRepository, authLoginLogsRepository, passwordResetTokensRepository, emailVerificationService, twoFactorService, auditService, securityService) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.authCredentialsRepository = authCredentialsRepository;
@@ -36,9 +38,19 @@ let AuthService = class AuthService {
         this.passwordResetTokensRepository = passwordResetTokensRepository;
         this.emailVerificationService = emailVerificationService;
         this.twoFactorService = twoFactorService;
+        this.auditService = auditService;
+        this.securityService = securityService;
     }
     async register(registerDto) {
-        const { username, email, password, name } = registerDto;
+        const sanitizedInput = this.securityService.validateAndSanitizeUserInput(registerDto);
+        const { username, email, password, name } = sanitizedInput;
+        if (!this.securityService.validateEmail(email)) {
+            throw new common_1.BadRequestException('Invalid email format');
+        }
+        const passwordValidation = this.securityService.validatePassword(password);
+        if (!passwordValidation.isValid) {
+            throw new common_1.BadRequestException(`Password validation failed: ${passwordValidation.errors.join(', ')}`);
+        }
         const existingUser = await this.userRepository.findOne({ where: [{ username }, { email }] });
         if (existingUser) {
             throw new common_1.ConflictException('User already exists');
@@ -55,19 +67,23 @@ let AuthService = class AuthService {
         });
         await this.authCredentialsRepository.save(authCredentials);
         await this.emailVerificationService.generateVerificationToken(user.id, email);
+        await this.auditService.logUserRegistration(user.id, email);
         return { message: 'User registered successfully. Please check console for verification token.' };
     }
     async login(loginDto, ipAddress, userAgent) {
-        const { usernameOrEmail, password, twoFactorCode } = loginDto;
+        const sanitizedInput = this.securityService.validateAndSanitizeUserInput(loginDto);
+        const { usernameOrEmail, password, twoFactorCode } = sanitizedInput;
         const credentials = await this.authCredentialsRepository.findOne({
             where: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
             relations: ['user'],
         });
         if (!credentials) {
+            await this.auditService.logFailedLogin(usernameOrEmail, 'User not found', ipAddress, userAgent);
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
         const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
         if (!isPasswordValid) {
+            await this.auditService.logFailedLogin(usernameOrEmail, 'Invalid password', ipAddress, userAgent);
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
         const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus(credentials.userId);
@@ -104,6 +120,7 @@ let AuthService = class AuthService {
             userAgent,
         });
         await this.authLoginLogsRepository.save(loginLog);
+        await this.auditService.logUserLogin(credentials.userId, credentials.email, ipAddress, userAgent, session.id.toString());
         return {
             accessToken,
             refreshToken,
@@ -147,6 +164,7 @@ let AuthService = class AuthService {
         });
         await this.passwordResetTokensRepository.save(resetTokenEntity);
         console.log(`Password reset token for ${email}: ${resetToken}`);
+        await this.auditService.logPasswordResetRequest(email);
         return { message: 'If the email exists, a password reset link has been sent.' };
     }
     async resetPassword(token, newPassword) {
@@ -172,9 +190,10 @@ let AuthService = class AuthService {
         await this.authCredentialsRepository.save(credentials);
         await this.passwordResetTokensRepository.delete(resetToken.id);
         console.log(`Password reset successful for user: ${resetToken.user.email}`);
+        await this.auditService.logPasswordReset(resetToken.userId);
         return { message: 'Password has been reset successfully' };
     }
-    async changePassword(userId, currentPassword, newPassword) {
+    async changePassword(userId, currentPassword, newPassword, ipAddress, userAgent) {
         const credentials = await this.authCredentialsRepository.findOne({
             where: { userId },
             relations: ['user'],
@@ -192,9 +211,10 @@ let AuthService = class AuthService {
         await this.authCredentialsRepository.save(credentials);
         await this.authSessionsRepository.update({ userId }, { status: 0 });
         console.log(`Password changed for user: ${credentials.user.email}`);
+        await this.auditService.logPasswordChange(userId, ipAddress, userAgent);
         return { message: 'Password changed successfully. Please login again.' };
     }
-    async logout(refreshToken) {
+    async logout(refreshToken, ipAddress, userAgent) {
         try {
             const payload = this.jwtService.verifyToken(refreshToken);
             const session = await this.authSessionsRepository.findOne({
@@ -204,6 +224,7 @@ let AuthService = class AuthService {
                 session.status = 0;
                 await this.authSessionsRepository.save(session);
             }
+            await this.auditService.logUserLogout(payload.sub, session?.id.toString(), ipAddress);
             return { message: 'Logged out successfully' };
         }
         catch {
@@ -213,6 +234,12 @@ let AuthService = class AuthService {
     async logoutAll(userId) {
         await this.authSessionsRepository.update({ userId }, { status: 0 });
         return { message: 'Logged out from all devices successfully' };
+    }
+    async getAllUsers() {
+        const users = await this.userRepository.find({
+            select: ['id', 'name', 'username', 'email', 'role', 'emailVerifiedAt', 'created_at', 'updated_at'],
+        });
+        return users;
     }
 };
 exports.AuthService = AuthService;
@@ -230,6 +257,8 @@ exports.AuthService = AuthService = __decorate([
         typeorm_2.Repository,
         typeorm_2.Repository,
         email_verification_service_1.EmailVerificationService,
-        two_factor_service_1.TwoFactorService])
+        two_factor_service_1.TwoFactorService,
+        audit_service_1.AuditService,
+        security_service_1.SecurityService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

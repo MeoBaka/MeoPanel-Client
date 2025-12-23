@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { User } from '../entities/user.entity';
 import { EmailVerificationTokens } from '../entities/email-verification-tokens.entity';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class EmailVerificationService {
@@ -12,6 +13,7 @@ export class EmailVerificationService {
     private userRepository: Repository<User>,
     @InjectRepository(EmailVerificationTokens)
     private emailVerificationTokensRepository: Repository<EmailVerificationTokens>,
+    private auditService: AuditService,
   ) {}
 
   async generateVerificationToken(userId: string, email: string) {
@@ -32,6 +34,9 @@ export class EmailVerificationService {
 
     // Log verification token (since email sending is not implemented)
     console.log(`Email verification token for ${email}: ${verificationToken}`);
+
+    // Audit log email verification sent
+    await this.auditService.logEmailVerificationSent(userId, email);
 
     return verificationToken;
   }
@@ -58,6 +63,9 @@ export class EmailVerificationService {
     await this.emailVerificationTokensRepository.delete(verificationToken.id);
 
     console.log(`Email verified for user: ${verificationToken.user.email}`);
+
+    // Audit log email verified
+    await this.auditService.logEmailVerified(verificationToken.userId, verificationToken.user.email);
 
     return { message: 'Email verified successfully' };
   }

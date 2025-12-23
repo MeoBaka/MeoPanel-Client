@@ -1,7 +1,9 @@
-import { Controller, Post, Body, Request, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Request, UseGuards, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { TwoFactorService } from './two-factor.service';
+import { TwoFactorService } from '../twofa/two-factor.service';
 import { JwtAuthGuard } from '../jwt';
+import { RolesGuard, Roles } from './security.service';
+import { UserRole } from '../entities/user.entity';
 
 @Controller('auth')
 export class AuthController {
@@ -44,12 +46,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
   async changePassword(@Request() req, @Body() body: { currentPassword: string; newPassword: string }) {
-    return this.authService.changePassword(req.user.id, body.currentPassword, body.newPassword);
+    return this.authService.changePassword(req.user.id, body.currentPassword, body.newPassword, req.ip, req.get('User-Agent'));
   }
 
   @Post('logout')
-  async logout(@Body() body: { refreshToken: string }) {
-    return this.authService.logout(body.refreshToken);
+  async logout(@Body() body: { refreshToken: string }, @Request() req) {
+    return this.authService.logout(body.refreshToken, req.ip, req.get('User-Agent'));
   }
 
   @UseGuards(JwtAuthGuard)
@@ -86,6 +88,13 @@ export class AuthController {
   @Post('2fa/status')
   async getTwoFactorStatus(@Request() req) {
     return this.twoFactorService.getTwoFactorStatus(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.OWNER)
+  @Get('users')
+  async getAllUsers() {
+    return this.authService.getAllUsers();
   }
 
 }

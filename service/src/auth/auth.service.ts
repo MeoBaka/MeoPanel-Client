@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -9,7 +9,9 @@ import { AuthLoginLogs } from '../entities/auth-login-logs.entity';
 import { PasswordResetTokens } from '../entities/password-reset-tokens.entity';
 import { JwtService } from '../jwt';
 import { EmailVerificationService } from '../email-verification/email-verification.service';
-import { TwoFactorService } from './two-factor.service';
+import { TwoFactorService } from '../twofa/two-factor.service';
+import { AuditService } from '../audit/audit.service';
+import { SecurityService } from './security.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -28,10 +30,25 @@ export class AuthService {
     private passwordResetTokensRepository: Repository<PasswordResetTokens>,
     private emailVerificationService: EmailVerificationService,
     private twoFactorService: TwoFactorService,
+    private auditService: AuditService,
+    private securityService: SecurityService,
   ) {}
 
   async register(registerDto: { username: string; email: string; password: string; name?: string }) {
-    const { username, email, password, name } = registerDto;
+    // Sanitize and validate input
+    const sanitizedInput = this.securityService.validateAndSanitizeUserInput(registerDto);
+    const { username, email, password, name } = sanitizedInput;
+
+    // Validate email format
+    if (!this.securityService.validateEmail(email)) {
+      throw new BadRequestException('Invalid email format');
+    }
+
+    // Validate password strength
+    const passwordValidation = this.securityService.validatePassword(password);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException(`Password validation failed: ${passwordValidation.errors.join(', ')}`);
+    }
 
     // Check if user exists
     const existingUser = await this.userRepository.findOne({ where: [{ username }, { email }] });
@@ -59,11 +76,16 @@ export class AuthService {
     // Generate email verification token
     await this.emailVerificationService.generateVerificationToken(user.id, email);
 
+    // Audit log user registration
+    await this.auditService.logUserRegistration(user.id, email);
+
     return { message: 'User registered successfully. Please check console for verification token.' };
   }
 
   async login(loginDto: { usernameOrEmail: string; password: string; twoFactorCode?: string }, ipAddress: string, userAgent: string) {
-    const { usernameOrEmail, password, twoFactorCode } = loginDto;
+    // Sanitize input
+    const sanitizedInput = this.securityService.validateAndSanitizeUserInput(loginDto);
+    const { usernameOrEmail, password, twoFactorCode } = sanitizedInput;
 
     // Find credentials
     const credentials = await this.authCredentialsRepository.findOne({
@@ -71,12 +93,16 @@ export class AuthService {
       relations: ['user'],
     });
     if (!credentials) {
+      // Audit log failed login attempt
+      await this.auditService.logFailedLogin(usernameOrEmail, 'User not found', ipAddress, userAgent);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Check password
     const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
     if (!isPasswordValid) {
+      // Audit log failed login attempt
+      await this.auditService.logFailedLogin(usernameOrEmail, 'Invalid password', ipAddress, userAgent);
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -126,6 +152,9 @@ export class AuthService {
       userAgent,
     });
     await this.authLoginLogsRepository.save(loginLog);
+
+    // Audit log successful login
+    await this.auditService.logUserLogin(credentials.userId, credentials.email, ipAddress, userAgent, session.id.toString());
 
     return {
       accessToken,
@@ -185,6 +214,9 @@ export class AuthService {
     // Log reset token (since email sending is not implemented)
     console.log(`Password reset token for ${email}: ${resetToken}`);
 
+    // Audit log password reset request
+    await this.auditService.logPasswordResetRequest(email);
+
     return { message: 'If the email exists, a password reset link has been sent.' };
   }
 
@@ -223,10 +255,13 @@ export class AuthService {
 
     console.log(`Password reset successful for user: ${resetToken.user.email}`);
 
+    // Audit log password reset
+    await this.auditService.logPasswordReset(resetToken.userId);
+
     return { message: 'Password has been reset successfully' };
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(userId: string, currentPassword: string, newPassword: string, ipAddress?: string, userAgent?: string) {
     // Find user credentials
     const credentials = await this.authCredentialsRepository.findOne({
       where: { userId },
@@ -259,10 +294,13 @@ export class AuthService {
 
     console.log(`Password changed for user: ${credentials.user.email}`);
 
+    // Audit log password change
+    await this.auditService.logPasswordChange(userId, ipAddress, userAgent);
+
     return { message: 'Password changed successfully. Please login again.' };
   }
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken: string, ipAddress?: string, userAgent?: string) {
     try {
       // Verify the refresh token to get user info
       const payload = this.jwtService.verifyToken(refreshToken);
@@ -276,6 +314,9 @@ export class AuthService {
         session.status = 0; // Mark as inactive
         await this.authSessionsRepository.save(session);
       }
+
+      // Audit log user logout
+      await this.auditService.logUserLogout(payload.sub, session?.id.toString(), ipAddress);
 
       return { message: 'Logged out successfully' };
     } catch {
@@ -292,6 +333,15 @@ export class AuthService {
     );
 
     return { message: 'Logged out from all devices successfully' };
+  }
+
+  async getAllUsers() {
+    // Get all users but exclude sensitive information
+    const users = await this.userRepository.find({
+      select: ['id', 'name', 'username', 'email', 'role', 'emailVerifiedAt', 'created_at', 'updated_at'],
+    });
+
+    return users;
   }
 
 }

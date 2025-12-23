@@ -9,8 +9,14 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.User = void 0;
+exports.User = exports.UserRole = void 0;
 const typeorm_1 = require("typeorm");
+var UserRole;
+(function (UserRole) {
+    UserRole["MEMBER"] = "MEMBER";
+    UserRole["ADMIN"] = "ADMIN";
+    UserRole["OWNER"] = "OWNER";
+})(UserRole || (exports.UserRole = UserRole = {}));
 let User = class User {
 };
 exports.User = User;
@@ -34,6 +40,10 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'email_verified_at' }),
     __metadata("design:type", Date)
 ], User.prototype, "emailVerifiedAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'enum', enum: UserRole, default: UserRole.MEMBER }),
+    __metadata("design:type", String)
+], User.prototype, "role", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)({ type: 'timestamp', nullable: true }),
     __metadata("design:type", Date)

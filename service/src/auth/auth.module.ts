@@ -10,15 +10,19 @@ import { PasswordResetTokens } from '../entities/password-reset-tokens.entity';
 import { TwoFactorAuth } from '../entities/two-factor-auth.entity';
 import { JwtModule } from '../jwt';
 import { EmailVerificationModule } from '../email-verification';
-import { TwoFactorService } from './two-factor.service';
+import { AuditModule } from '../audit/audit.module';
+import { TwoFactorModule } from '../twofa/two-factor.module';
+import { SecurityService, RolesGuard } from './security.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, AuthCredentials, AuthSessions, AuthLoginLogs, PasswordResetTokens, TwoFactorAuth]),
     JwtModule,
     EmailVerificationModule,
+    AuditModule,
+    TwoFactorModule,
   ],
-  providers: [AuthService, TwoFactorService],
+  providers: [AuthService, SecurityService, RolesGuard],
   controllers: [AuthController],
   exports: [AuthService],
 })

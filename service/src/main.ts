@@ -1,8 +1,12 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { SecurityExceptionFilter } from './auth/security.exception-filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Apply global security exception filter
+  app.useGlobalFilters(new SecurityExceptionFilter());
 
   // Enable CORS for frontend
   app.enableCors({

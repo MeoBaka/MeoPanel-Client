@@ -13,6 +13,7 @@ const email_verification_service_1 = require("./email-verification.service");
 const email_verification_controller_1 = require("./email-verification.controller");
 const user_entity_1 = require("../entities/user.entity");
 const email_verification_tokens_entity_1 = require("../entities/email-verification-tokens.entity");
+const audit_module_1 = require("../audit/audit.module");
 let EmailVerificationModule = class EmailVerificationModule {
 };
 exports.EmailVerificationModule = EmailVerificationModule;
@@ -20,6 +21,7 @@ exports.EmailVerificationModule = EmailVerificationModule = __decorate([
     (0, common_1.Module)({
         imports: [
             typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, email_verification_tokens_entity_1.EmailVerificationTokens]),
+            audit_module_1.AuditModule,
         ],
         providers: [email_verification_service_1.EmailVerificationService],
         controllers: [email_verification_controller_1.EmailVerificationController],
