@@ -103,18 +103,20 @@ let AuthService = class AuthService {
                 throw new common_1.UnauthorizedException('Invalid two-factor code');
             }
         }
-        const payload = { sub: credentials.username, username: credentials.username };
-        const accessToken = this.jwtService.generateAccessToken(payload);
-        const refreshToken = this.jwtService.generateRefreshToken(payload);
         const refreshExpiresAt = new Date();
         refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 7);
         const session = this.authSessionsRepository.create({
             userId: user.id,
-            refreshToken,
+            refreshToken: '',
             refreshExpiresAt,
             ipAddress,
             userAgent,
         });
+        await this.authSessionsRepository.save(session);
+        const payload = { sub: credentials.username, username: credentials.username, sessionId: session.id };
+        const accessToken = this.jwtService.generateAccessToken(payload);
+        const refreshToken = this.jwtService.generateRefreshToken(payload);
+        session.refreshToken = refreshToken;
         await this.authSessionsRepository.save(session);
         const loginLog = this.authLoginLogsRepository.create({
             userId: user.id,
@@ -149,7 +151,7 @@ let AuthService = class AuthService {
             if (!session || session.refreshExpiresAt < new Date()) {
                 throw new common_1.UnauthorizedException();
             }
-            const newPayload = { sub: user.username, username: user.username };
+            const newPayload = { sub: user.username, username: user.username, sessionId: session.id };
             const newAccessToken = this.jwtService.generateAccessToken(newPayload);
             const newRefreshToken = this.jwtService.generateRefreshToken(newPayload);
             session.refreshToken = newRefreshToken;
@@ -262,6 +264,34 @@ let AuthService = class AuthService {
             select: ['id', 'name', 'username', 'email', 'role', 'emailVerifiedAt', 'created_at', 'updated_at'],
         });
         return users;
+    }
+    async getUserSessions(userId) {
+        const sessions = await this.authSessionsRepository.find({
+            where: { userId, status: 1 },
+            select: ['id', 'userAgent', 'ipAddress', 'createdAt', 'lastUsedAt'],
+            order: { createdAt: 'DESC' },
+        });
+        return sessions.map(session => ({
+            id: session.id,
+            userAgent: session.userAgent,
+            ipAddress: session.ipAddress,
+            createdAt: session.createdAt,
+            lastUsedAt: session.lastUsedAt,
+        }));
+    }
+    async logoutSession(userId, sessionId, currentSessionId) {
+        if (sessionId === currentSessionId) {
+            throw new common_1.BadRequestException('Cannot logout current session');
+        }
+        const session = await this.authSessionsRepository.findOne({
+            where: { id: sessionId, userId, status: 1 },
+        });
+        if (!session) {
+            throw new common_1.BadRequestException('Session not found');
+        }
+        session.status = 0;
+        await this.authSessionsRepository.save(session);
+        return { message: 'Session logged out successfully' };
     }
 };
 exports.AuthService = AuthService;

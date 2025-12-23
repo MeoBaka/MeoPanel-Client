@@ -98,4 +98,16 @@ export class AuthController {
     return this.authService.getAllUsers();
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('sessions')
+  async getSessions(@Request() req) {
+    return this.authService.getUserSessions(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('logout-session')
+  async logoutSession(@Request() req, @Body() body: { sessionId: string }) {
+    return this.authService.logoutSession(req.user.id, body.sessionId, req.user.sessionId);
+  }
+
 }

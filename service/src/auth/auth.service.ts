@@ -132,22 +132,26 @@ export class AuthService {
       }
     }
 
-    // Generate tokens
-    const payload = { sub: credentials.username, username: credentials.username };
-    const accessToken = this.jwtService.generateAccessToken(payload);
-    const refreshToken = this.jwtService.generateRefreshToken(payload);
-
     // Create session
     const refreshExpiresAt = new Date();
     refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 7);
 
     const session = this.authSessionsRepository.create({
       userId: user.id,
-      refreshToken,
+      refreshToken: '', // temporary
       refreshExpiresAt,
       ipAddress,
       userAgent,
     });
+    await this.authSessionsRepository.save(session);
+
+    // Generate tokens
+    const payload = { sub: credentials.username, username: credentials.username, sessionId: session.id };
+    const accessToken = this.jwtService.generateAccessToken(payload);
+    const refreshToken = this.jwtService.generateRefreshToken(payload);
+
+    // Update session with refresh token
+    session.refreshToken = refreshToken;
     await this.authSessionsRepository.save(session);
 
     // Log login
@@ -191,7 +195,7 @@ export class AuthService {
         throw new UnauthorizedException();
       }
 
-      const newPayload = { sub: user.username, username: user.username };
+      const newPayload = { sub: user.username, username: user.username, sessionId: session.id };
       const newAccessToken = this.jwtService.generateAccessToken(newPayload);
       const newRefreshToken = this.jwtService.generateRefreshToken(newPayload);
 
@@ -371,6 +375,41 @@ export class AuthService {
     });
 
     return users;
+  }
+
+  async getUserSessions(userId: string) {
+    const sessions = await this.authSessionsRepository.find({
+      where: { userId, status: 1 },
+      select: ['id', 'userAgent', 'ipAddress', 'createdAt', 'lastUsedAt'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return sessions.map(session => ({
+      id: session.id,
+      userAgent: session.userAgent,
+      ipAddress: session.ipAddress,
+      createdAt: session.createdAt,
+      lastUsedAt: session.lastUsedAt,
+    }));
+  }
+
+  async logoutSession(userId: string, sessionId: string, currentSessionId: string) {
+    if (sessionId === currentSessionId) {
+      throw new BadRequestException('Cannot logout current session');
+    }
+
+    const session = await this.authSessionsRepository.findOne({
+      where: { id: sessionId, userId, status: 1 },
+    });
+
+    if (!session) {
+      throw new BadRequestException('Session not found');
+    }
+
+    session.status = 0;
+    await this.authSessionsRepository.save(session);
+
+    return { message: 'Session logged out successfully' };
   }
 
 }

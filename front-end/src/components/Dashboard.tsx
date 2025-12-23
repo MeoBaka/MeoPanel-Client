@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import TwoFactorSetup from './TwoFactorSetup'
 import ChangePasswordForm from './ChangePasswordForm'
+import SessionList from './SessionList'
 
 type TabType = 'profile' | 'security' | '2fa'
 
@@ -129,9 +130,13 @@ function ProfileTab() {
 }
 
 function SecurityTab() {
+  const { logout, logoutAll } = useAuth()
+
   return (
     <div className="space-y-6">
       <ChangePasswordForm />
+
+      <SessionList />
 
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
         <div className="px-4 py-5 sm:p-6">
@@ -141,7 +146,7 @@ function SecurityTab() {
               <h4 className="text-sm font-medium text-gray-900">Current Session</h4>
               <p className="text-sm text-gray-500">Log out from your current session only.</p>
               <button
-                onClick={() => useAuth().logout()}
+                onClick={logout}
                 className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
               >
                 Logout Current Session
@@ -152,7 +157,7 @@ function SecurityTab() {
               <h4 className="text-sm font-medium text-gray-900">All Sessions</h4>
               <p className="text-sm text-gray-500">Log out from all devices and sessions.</p>
               <button
-                onClick={() => useAuth().logoutAll()}
+                onClick={logoutAll}
                 className="mt-2 bg-red-800 hover:bg-red-900 text-white px-4 py-2 rounded text-sm"
               >
                 Logout All Sessions

@@ -12,12 +12,22 @@ interface User {
   updated_at: string
 }
 
+interface Session {
+  id: string
+  userAgent: string
+  ipAddress: string
+  createdAt: string
+  lastUsedAt: string
+}
+
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string, twoFactorCode?: string) => Promise<any>
   register: (data: { username: string; email: string; password: string }) => Promise<any>
   logout: () => Promise<void>
   logoutAll: () => Promise<void>
+  getSessions: () => Promise<Session[]>
+  logoutSession: (sessionId: string) => Promise<any>
   forgotPassword: (email: string) => Promise<any>
   resetPassword: (token: string, newPassword: string) => Promise<any>
   changePassword: (currentPassword: string, newPassword: string) => Promise<any>
@@ -205,6 +215,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRequiresTwoFactor(false)
       setTwoFactorUserId(null)
     }
+  }
+
+  const getSessions = async (): Promise<Session[]> => {
+    const token = localStorage.getItem('accessToken')
+    const response = await fetch('http://localhost:5000/auth/sessions', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Get sessions failed')
+    }
+
+    return data
+  }
+
+  const logoutSession = async (sessionId: string) => {
+    const token = localStorage.getItem('accessToken')
+    const response = await fetch('http://localhost:5000/auth/logout-session', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Logout session failed')
+    }
+
+    return data
   }
 
   const forgotPassword = async (email: string) => {
@@ -401,6 +449,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     logoutAll,
+    getSessions,
+    logoutSession,
     forgotPassword,
     resetPassword,
     changePassword,
