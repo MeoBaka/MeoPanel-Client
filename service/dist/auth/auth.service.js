@@ -75,38 +75,41 @@ let AuthService = class AuthService {
         const { usernameOrEmail, password, twoFactorCode } = sanitizedInput;
         const credentials = await this.authCredentialsRepository.findOne({
             where: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
-            relations: ['user'],
         });
         if (!credentials) {
             await this.auditService.logFailedLogin(usernameOrEmail, 'User not found', ipAddress, userAgent);
             throw new common_1.UnauthorizedException('Invalid credentials');
+        }
+        const user = await this.userRepository.findOne({ where: { username: credentials.username } });
+        if (!user) {
+            throw new common_1.UnauthorizedException('User not found');
         }
         const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
         if (!isPasswordValid) {
             await this.auditService.logFailedLogin(usernameOrEmail, 'Invalid password', ipAddress, userAgent);
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
-        const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus(credentials.userId);
+        const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus(user.id);
         if (twoFactorStatus.isEnabled) {
             if (!twoFactorCode) {
                 return {
                     requiresTwoFactor: true,
-                    userId: credentials.userId,
+                    userId: user.id,
                     message: 'Two-factor authentication required',
                 };
             }
-            const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode(credentials.userId, twoFactorCode);
+            const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode(user.id, twoFactorCode);
             if (!isTwoFactorValid) {
                 throw new common_1.UnauthorizedException('Invalid two-factor code');
             }
         }
-        const payload = { sub: credentials.userId, username: credentials.username };
+        const payload = { sub: credentials.username, username: credentials.username };
         const accessToken = this.jwtService.generateAccessToken(payload);
         const refreshToken = this.jwtService.generateRefreshToken(payload);
         const refreshExpiresAt = new Date();
         refreshExpiresAt.setDate(refreshExpiresAt.getDate() + 7);
         const session = this.authSessionsRepository.create({
-            userId: credentials.userId,
+            userId: user.id,
             refreshToken,
             refreshExpiresAt,
             ipAddress,
@@ -114,29 +117,39 @@ let AuthService = class AuthService {
         });
         await this.authSessionsRepository.save(session);
         const loginLog = this.authLoginLogsRepository.create({
-            userId: credentials.userId,
+            userId: user.id,
             sessionId: session.id,
             ipAddress,
             userAgent,
         });
         await this.authLoginLogsRepository.save(loginLog);
-        await this.auditService.logUserLogin(credentials.userId, credentials.email, ipAddress, userAgent, session.id.toString());
+        await this.auditService.logUserLogin(user.id, credentials.email, ipAddress, userAgent, session.id.toString());
         return {
             accessToken,
             refreshToken,
-            user: credentials.user,
+            user,
         };
     }
     async refreshToken(refreshToken) {
         try {
             const payload = this.jwtService.verifyToken(refreshToken);
+            let user;
+            if (payload.sub.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                user = await this.userRepository.findOne({ where: { id: payload.sub } });
+            }
+            else {
+                user = await this.userRepository.findOne({ where: { username: payload.sub } });
+            }
+            if (!user) {
+                throw new common_1.UnauthorizedException();
+            }
             const session = await this.authSessionsRepository.findOne({
-                where: { refreshToken, userId: payload.sub },
+                where: { refreshToken, userId: user.id },
             });
             if (!session || session.refreshExpiresAt < new Date()) {
                 throw new common_1.UnauthorizedException();
             }
-            const newPayload = { sub: payload.sub, username: payload.username };
+            const newPayload = { sub: user.username, username: user.username };
             const newAccessToken = this.jwtService.generateAccessToken(newPayload);
             const newRefreshToken = this.jwtService.generateRefreshToken(newPayload);
             session.refreshToken = newRefreshToken;
@@ -217,14 +230,23 @@ let AuthService = class AuthService {
     async logout(refreshToken, ipAddress, userAgent) {
         try {
             const payload = this.jwtService.verifyToken(refreshToken);
+            let user;
+            if (payload.sub.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                user = await this.userRepository.findOne({ where: { id: payload.sub } });
+            }
+            else {
+                user = await this.userRepository.findOne({ where: { username: payload.sub } });
+            }
             const session = await this.authSessionsRepository.findOne({
-                where: { refreshToken, userId: payload.sub },
+                where: { refreshToken, userId: user?.id },
             });
             if (session) {
                 session.status = 0;
                 await this.authSessionsRepository.save(session);
             }
-            await this.auditService.logUserLogout(payload.sub, session?.id.toString(), ipAddress);
+            if (user) {
+                await this.auditService.logUserLogout(user.id, session?.id.toString(), ipAddress);
+            }
             return { message: 'Logged out successfully' };
         }
         catch {

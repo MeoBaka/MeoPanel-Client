@@ -19,6 +19,7 @@ const two_factor_service_1 = require("../twofa/two-factor.service");
 const jwt_1 = require("../jwt");
 const security_service_1 = require("./security.service");
 const user_entity_1 = require("../entities/user.entity");
+const dto_1 = require("../dto");
 let AuthController = class AuthController {
     constructor(authService, twoFactorService) {
         this.authService = authService;
@@ -75,7 +76,7 @@ __decorate([
     (0, common_1.Post)('register'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [dto_1.RegisterDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "register", null);
 __decorate([
@@ -83,7 +84,7 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [dto_1.LoginDto, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
@@ -95,7 +96,7 @@ __decorate([
 ], AuthController.prototype, "refresh", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
-    (0, common_1.Post)('me'),
+    (0, common_1.Get)('me'),
     __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

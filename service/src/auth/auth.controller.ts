@@ -4,6 +4,7 @@ import { TwoFactorService } from '../twofa/two-factor.service';
 import { JwtAuthGuard } from '../jwt';
 import { RolesGuard, Roles } from './security.service';
 import { UserRole } from '../entities/user.entity';
+import { RegisterDto, LoginDto } from '../dto';
 
 @Controller('auth')
 export class AuthController {
@@ -13,12 +14,12 @@ export class AuthController {
   ) {}
 
   @Post('register')
-  async register(@Body() body: { username: string; email: string; password: string; name?: string }) {
+  async register(@Body() body: RegisterDto) {
     return this.authService.register(body);
   }
 
   @Post('login')
-  async login(@Body() body: { usernameOrEmail: string; password: string }, @Request() req) {
+  async login(@Body() body: LoginDto, @Request() req) {
     return this.authService.login(body, req.ip, req.get('User-Agent'));
   }
 
@@ -28,7 +29,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('me')
+  @Get('me')
   getProfile(@Request() req) {
     return req.user;
   }
