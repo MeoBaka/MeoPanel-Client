@@ -58,8 +58,8 @@ let AuthController = class AuthController {
     async verifyTwoFactor(req, body) {
         return this.twoFactorService.verifyAndEnableTwoFactor(req.user.id, body.token);
     }
-    async disableTwoFactor(req) {
-        return this.twoFactorService.disableTwoFactor(req.user.id);
+    async disableTwoFactor(req, body) {
+        return this.twoFactorService.disableTwoFactor(req.user.id, body.verificationToken, body.currentPassword);
     }
     async regenerateBackupCodes(req) {
         return this.twoFactorService.regenerateBackupCodes(req.user.id);
@@ -71,7 +71,7 @@ let AuthController = class AuthController {
         return this.authService.getAllUsers();
     }
     async getSessions(req) {
-        return this.authService.getUserSessions(req.user.id);
+        return this.authService.getUserSessions(req.user.id, req.user.sessionId);
     }
     async logoutSession(req, body) {
         return this.authService.logoutSession(req.user.id, body.sessionId, req.user.sessionId);
@@ -168,8 +168,9 @@ __decorate([
     (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
     (0, common_1.Post)('2fa/disable'),
     __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "disableTwoFactor", null);
 __decorate([

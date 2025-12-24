@@ -8,6 +8,7 @@ interface User {
   username: string
   email: string
   emailVerifiedAt?: string
+  role: string
   created_at: string
   updated_at: string
 }
@@ -35,7 +36,7 @@ interface AuthContextType {
   resendVerification: (email: string) => Promise<any>
   setupTwoFactor: () => Promise<any>
   verifyTwoFactor: (token: string) => Promise<any>
-  disableTwoFactor: () => Promise<any>
+  disableTwoFactor: (verificationToken: string, currentPassword: string) => Promise<any>
   regenerateBackupCodes: () => Promise<any>
   getTwoFactorStatus: () => Promise<any>
   isLoading: boolean
@@ -52,10 +53,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [twoFactorUserId, setTwoFactorUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    checkAuth()
+    // Add a small delay to ensure backend is ready
+    const timer = setTimeout(() => {
+      checkAuth()
+    }, 500)
+
+    // Safety timeout to prevent infinite loading
+    const safetyTimer = setTimeout(() => {
+      setIsLoading(false)
+    }, 10000) // 10 seconds max loading time
+
+    return () => {
+      clearTimeout(timer)
+      clearTimeout(safetyTimer)
+    }
   }, [])
 
-  const checkAuth = async () => {
+  const checkAuth = async (retryCount = 0) => {
     try {
       const token = localStorage.getItem('accessToken')
       if (token) {
@@ -69,29 +83,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response.ok) {
           const userData = await response.json()
           setUser(userData)
-        } else {
+          setIsLoading(false)
+        } else if (response.status === 401) {
           // Token expired, try refresh
           await refreshToken()
+          setIsLoading(false)
+        } else if (response.status >= 500 && retryCount < 3) {
+          // Server error, retry after a delay
+          setTimeout(() => checkAuth(retryCount + 1), 1000 * (retryCount + 1))
+          return
+        } else {
+          // Other errors, stop loading
+          setIsLoading(false)
         }
+      } else {
+        // No token, stop loading
+        setIsLoading(false)
       }
     } catch (error) {
       console.error('Auth check failed:', error)
-    } finally {
-      setIsLoading(false)
+      // If it's a network error and we haven't retried too many times, try again
+      if (retryCount < 3) {
+        setTimeout(() => checkAuth(retryCount + 1), 1000 * (retryCount + 1))
+        return
+      } else {
+        // Max retries reached or other error, stop loading
+        setIsLoading(false)
+      }
     }
   }
 
-  const refreshToken = async () => {
+  const refreshToken = async (retryCount = 0) => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (!refreshToken) return
+      const refreshTokenValue = localStorage.getItem('refreshToken')
+      if (!refreshTokenValue) {
+        setIsLoading(false)
+        return
+      }
 
       const response = await fetch('http://localhost:5000/auth/refresh', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ refreshToken: refreshTokenValue }),
       })
 
       if (response.ok) {
@@ -111,10 +146,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userData = await profileResponse.json()
           setUser(userData)
         }
+        setIsLoading(false)
+      } else if (response.status >= 500 && retryCount < 3) {
+        // Server error, retry after a delay
+        setTimeout(() => refreshToken(retryCount + 1), 1000 * (retryCount + 1))
+        return
+      } else {
+        // Other errors, logout and stop loading
+        logout()
+        setIsLoading(false)
       }
     } catch (error) {
       console.error('Token refresh failed:', error)
-      logout()
+      // If it's a network error and we haven't retried too many times, try again
+      if (retryCount < 3) {
+        setTimeout(() => refreshToken(retryCount + 1), 1000 * (retryCount + 1))
+        return
+      } else {
+        // Max retries reached, logout and stop loading
+        logout()
+        setIsLoading(false)
+      }
     }
   }
 
@@ -386,7 +438,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  const disableTwoFactor = async () => {
+  const disableTwoFactor = async (verificationToken: string, currentPassword: string) => {
     const token = localStorage.getItem('accessToken')
     const response = await fetch('http://localhost:5000/auth/2fa/disable', {
       method: 'POST',
@@ -394,6 +446,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ verificationToken, currentPassword }),
     })
 
     const data = await response.json()

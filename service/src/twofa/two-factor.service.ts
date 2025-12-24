@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { TwofaAuth } from '../entities/twofa-auth.entity';
 import { TwofaBackupCode } from '../entities/twofa-backupcode.entity';
 import { User } from '../entities/user.entity';
+import { AuthCredentials } from '../entities/auth-credentials.entity';
 import { AuditService } from '../audit/audit.service';
 
 @Injectable()
@@ -18,6 +19,8 @@ export class TwoFactorService {
     private twofaBackupCodeRepository: Repository<TwofaBackupCode>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(AuthCredentials)
+    private authCredentialsRepository: Repository<AuthCredentials>,
     private auditService: AuditService,
   ) {}
 
@@ -202,13 +205,30 @@ export class TwoFactorService {
     return false;
   }
 
-  async disableTwoFactor(userId: string) {
+  async disableTwoFactor(userId: string, verificationToken: string, currentPassword: string) {
+    const authCredentials = await this.authCredentialsRepository.findOne({ where: { userId } });
+    if (!authCredentials) {
+      throw new BadRequestException('User credentials not found');
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, authCredentials.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid current password');
+    }
+
     const twoFactorAuth = await this.twofaAuthRepository.findOne({
       where: { userId },
     });
 
     if (!twoFactorAuth) {
       throw new BadRequestException('Two-factor authentication not set up');
+    }
+
+    // Verify 2FA token (either TOTP or backup code)
+    const isValidToken = await this.verifyTwoFactorCode(userId, verificationToken);
+    if (!isValidToken) {
+      throw new UnauthorizedException('Invalid verification token');
     }
 
     // Disable 2FA

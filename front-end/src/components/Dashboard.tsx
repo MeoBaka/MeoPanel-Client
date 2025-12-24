@@ -118,6 +118,14 @@ function ProfileTab() {
             </dd>
           </div>
           <div>
+            <dt className="text-sm font-medium text-gray-400">Role</dt>
+            <dd className="mt-1 text-sm text-white">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-800 text-blue-200 capitalize">
+                {user.role}
+              </span>
+            </dd>
+          </div>
+          <div>
             <dt className="text-sm font-medium text-gray-400">Member Since</dt>
             <dd className="mt-1 text-sm text-white">
               {new Date(user.created_at).toLocaleDateString()}

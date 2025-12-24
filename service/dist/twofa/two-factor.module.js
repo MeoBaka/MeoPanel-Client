@@ -13,6 +13,7 @@ const two_factor_service_1 = require("./two-factor.service");
 const twofa_auth_entity_1 = require("../entities/twofa-auth.entity");
 const twofa_backupcode_entity_1 = require("../entities/twofa-backupcode.entity");
 const user_entity_1 = require("../entities/user.entity");
+const auth_credentials_entity_1 = require("../entities/auth-credentials.entity");
 const audit_module_1 = require("../audit/audit.module");
 let TwoFactorModule = class TwoFactorModule {
 };
@@ -20,7 +21,7 @@ exports.TwoFactorModule = TwoFactorModule;
 exports.TwoFactorModule = TwoFactorModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([twofa_auth_entity_1.TwofaAuth, twofa_backupcode_entity_1.TwofaBackupCode, user_entity_1.User]),
+            typeorm_1.TypeOrmModule.forFeature([twofa_auth_entity_1.TwofaAuth, twofa_backupcode_entity_1.TwofaBackupCode, user_entity_1.User, auth_credentials_entity_1.AuthCredentials]),
             audit_module_1.AuditModule,
         ],
         providers: [two_factor_service_1.TwoFactorService],

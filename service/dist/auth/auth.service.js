@@ -265,7 +265,7 @@ let AuthService = class AuthService {
         });
         return users;
     }
-    async getUserSessions(userId) {
+    async getUserSessions(userId, currentSessionId) {
         const sessions = await this.authSessionsRepository.find({
             where: { userId, status: 1 },
             select: ['id', 'userAgent', 'ipAddress', 'createdAt', 'lastUsedAt'],
@@ -277,6 +277,7 @@ let AuthService = class AuthService {
             ipAddress: session.ipAddress,
             createdAt: session.createdAt,
             lastUsedAt: session.lastUsedAt,
+            isCurrent: session.id === currentSessionId,
         }));
     }
     async logoutSession(userId, sessionId, currentSessionId) {

@@ -4,11 +4,12 @@ import { TwoFactorService } from './two-factor.service';
 import { TwofaAuth } from '../entities/twofa-auth.entity';
 import { TwofaBackupCode } from '../entities/twofa-backupcode.entity';
 import { User } from '../entities/user.entity';
+import { AuthCredentials } from '../entities/auth-credentials.entity';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TwofaAuth, TwofaBackupCode, User]),
+    TypeOrmModule.forFeature([TwofaAuth, TwofaBackupCode, User, AuthCredentials]),
     AuditModule,
   ],
   providers: [TwoFactorService],

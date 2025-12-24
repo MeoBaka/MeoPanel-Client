@@ -377,7 +377,7 @@ export class AuthService {
     return users;
   }
 
-  async getUserSessions(userId: string) {
+  async getUserSessions(userId: string, currentSessionId?: string) {
     const sessions = await this.authSessionsRepository.find({
       where: { userId, status: 1 },
       select: ['id', 'userAgent', 'ipAddress', 'createdAt', 'lastUsedAt'],
@@ -390,6 +390,7 @@ export class AuthService {
       ipAddress: session.ipAddress,
       createdAt: session.createdAt,
       lastUsedAt: session.lastUsedAt,
+      isCurrent: session.id === currentSessionId,
     }));
   }
 

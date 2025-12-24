@@ -22,12 +22,14 @@ const bcrypt = require("bcrypt");
 const twofa_auth_entity_1 = require("../entities/twofa-auth.entity");
 const twofa_backupcode_entity_1 = require("../entities/twofa-backupcode.entity");
 const user_entity_1 = require("../entities/user.entity");
+const auth_credentials_entity_1 = require("../entities/auth-credentials.entity");
 const audit_service_1 = require("../audit/audit.service");
 let TwoFactorService = class TwoFactorService {
-    constructor(twofaAuthRepository, twofaBackupCodeRepository, userRepository, auditService) {
+    constructor(twofaAuthRepository, twofaBackupCodeRepository, userRepository, authCredentialsRepository, auditService) {
         this.twofaAuthRepository = twofaAuthRepository;
         this.twofaBackupCodeRepository = twofaBackupCodeRepository;
         this.userRepository = userRepository;
+        this.authCredentialsRepository = authCredentialsRepository;
         this.auditService = auditService;
     }
     async generateSecret(userId) {
@@ -153,12 +155,24 @@ let TwoFactorService = class TwoFactorService {
         }
         return false;
     }
-    async disableTwoFactor(userId) {
+    async disableTwoFactor(userId, verificationToken, currentPassword) {
+        const authCredentials = await this.authCredentialsRepository.findOne({ where: { userId } });
+        if (!authCredentials) {
+            throw new common_1.BadRequestException('User credentials not found');
+        }
+        const isPasswordValid = await bcrypt.compare(currentPassword, authCredentials.passwordHash);
+        if (!isPasswordValid) {
+            throw new common_1.UnauthorizedException('Invalid current password');
+        }
         const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId },
         });
         if (!twoFactorAuth) {
             throw new common_1.BadRequestException('Two-factor authentication not set up');
+        }
+        const isValidToken = await this.verifyTwoFactorCode(userId, verificationToken);
+        if (!isValidToken) {
+            throw new common_1.UnauthorizedException('Invalid verification token');
         }
         twoFactorAuth.isEnabled = 0;
         twoFactorAuth.secret = '';
@@ -209,7 +223,9 @@ exports.TwoFactorService = TwoFactorService = __decorate([
     __param(0, (0, typeorm_1.InjectRepository)(twofa_auth_entity_1.TwofaAuth)),
     __param(1, (0, typeorm_1.InjectRepository)(twofa_backupcode_entity_1.TwofaBackupCode)),
     __param(2, (0, typeorm_1.InjectRepository)(user_entity_1.User)),
+    __param(3, (0, typeorm_1.InjectRepository)(auth_credentials_entity_1.AuthCredentials)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository,
         typeorm_2.Repository,
         typeorm_2.Repository,
         audit_service_1.AuditService])

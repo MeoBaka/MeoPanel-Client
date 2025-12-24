@@ -75,8 +75,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('2fa/disable')
-  async disableTwoFactor(@Request() req) {
-    return this.twoFactorService.disableTwoFactor(req.user.id);
+  async disableTwoFactor(@Request() req, @Body() body: { verificationToken: string; currentPassword: string }) {
+    return this.twoFactorService.disableTwoFactor(req.user.id, body.verificationToken, body.currentPassword);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -101,7 +101,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('sessions')
   async getSessions(@Request() req) {
-    return this.authService.getUserSessions(req.user.id);
+    return this.authService.getUserSessions(req.user.id, req.user.sessionId);
   }
 
   @UseGuards(JwtAuthGuard)
