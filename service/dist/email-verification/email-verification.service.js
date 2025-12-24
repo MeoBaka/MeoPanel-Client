@@ -53,6 +53,7 @@ let EmailVerificationService = class EmailVerificationService {
             throw new common_1.UnauthorizedException('Verification token has expired');
         }
         verificationToken.user.emailVerifiedAt = new Date();
+        verificationToken.user.status = 1;
         await this.userRepository.save(verificationToken.user);
         await this.emailVerificationTokensRepository.delete(verificationToken.id);
         console.log(`Email verified for user: ${verificationToken.user.email}`);

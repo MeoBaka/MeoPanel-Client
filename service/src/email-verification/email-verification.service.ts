@@ -55,8 +55,9 @@ export class EmailVerificationService {
       throw new UnauthorizedException('Verification token has expired');
     }
 
-    // Update user email_verified_at
+    // Update user email_verified_at and set status to active (1)
     verificationToken.user.emailVerifiedAt = new Date();
+    verificationToken.user.status = 1; // Set status to active
     await this.userRepository.save(verificationToken.user);
 
     // Delete the verification token

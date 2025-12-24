@@ -26,6 +26,12 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.MEMBER })
   role: UserRole;
 
+  @Column({ type: 'int', default: 0 })
+  status: number;
+
+  @Column({ type: 'int', default: 0, name: 'login_failed' })
+  loginFailed: number;
+
   @CreateDateColumn({ type: 'timestamp', nullable: true })
   created_at: Date;
 

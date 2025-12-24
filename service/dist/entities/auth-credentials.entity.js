@@ -41,10 +41,6 @@ __decorate([
     __metadata("design:type", String)
 ], AuthCredentials.prototype, "passwordHash", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'tinyint', default: 0 }),
-    __metadata("design:type", Number)
-], AuthCredentials.prototype, "status", void 0);
-__decorate([
     (0, typeorm_1.CreateDateColumn)({ type: 'timestamp', name: 'created_at' }),
     __metadata("design:type", Date)
 ], AuthCredentials.prototype, "createdAt", void 0);

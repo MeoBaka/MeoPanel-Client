@@ -100,6 +100,13 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
 }
 ```
 
+## Status Values
+- `0`: Unverified (email chưa được xác minh)
+- `1`: Active (tài khoản hoạt động bình thường)
+- `-1`: Banned (tài khoản bị cấm)
+
+**Lưu ý**: Khi email được xác minh thành công, status sẽ tự động chuyển thành `1`. Admin có thể set status thành `-1` để cấm tài khoản.
+
 ## Notes
 - All requests should include appropriate headers, such as `Content-Type: application/json`.
 - Authentication may be required depending on your setup (check the AuthModule).

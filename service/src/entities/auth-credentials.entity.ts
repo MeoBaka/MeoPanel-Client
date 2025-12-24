@@ -22,9 +22,6 @@ export class AuthCredentials {
   @Column({ type: 'varchar', length: 255, name: 'password_hash' })
   passwordHash: string;
 
-  @Column({ type: 'tinyint', default: 0 })
-  status: number;
-
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 

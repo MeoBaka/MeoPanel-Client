@@ -84,6 +84,9 @@ let AuthService = class AuthService {
         if (!user) {
             throw new common_1.UnauthorizedException('User not found');
         }
+        if (user.status === -1) {
+            throw new common_1.UnauthorizedException('Account is banned');
+        }
         const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
         if (!isPasswordValid) {
             await this.auditService.logFailedLogin(usernameOrEmail, 'Invalid password', ipAddress, userAgent);

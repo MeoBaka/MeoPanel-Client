@@ -2,27 +2,38 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import TwoFactorSetup from './TwoFactorSetup'
-import ChangePasswordForm from './ChangePasswordForm'
-import SessionList from './SessionList'
+import TwoFactorSetup from '@/components/TwoFactorSetup'
+import ChangePasswordForm from '@/components/ChangePasswordForm'
+import SessionList from '@/components/SessionList'
+import { useRouter } from 'next/navigation'
 
 type TabType = 'profile' | 'security' | '2fa'
 
-export default function Dashboard() {
+export default function Settings() {
   const { user, logout, logoutAll } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('profile')
+  const router = useRouter()
 
-  if (!user) return null
+  if (!user) {
+    router.push('/')
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-gray-900">
-      <nav className="bg-gray-800 border-b border-gray-700">
+      {/* Header */}
+      <header className="bg-gray-800 border-b border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+          <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-white">MeoPanel Dashboard</h1>
+              <button
+                onClick={() => router.push('/')}
+                className="text-2xl font-bold text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                MeoPanel Client
+              </button>
             </div>
-            <div className="flex items-center space-x-4">
+            <nav className="flex space-x-4">
               <span className="text-sm text-gray-300">Welcome, {user.name || user.username}</span>
               <button
                 onClick={logout}
@@ -30,10 +41,10 @@ export default function Dashboard() {
               >
                 Logout
               </button>
-            </div>
+            </nav>
           </div>
         </div>
-      </nav>
+      </header>
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">

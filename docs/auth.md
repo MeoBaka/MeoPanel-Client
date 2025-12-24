@@ -289,7 +289,7 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
 - **Status Codes**: 200 (OK), 401 (Unauthorized)
 
 ### 16. Get Current User Profile
-- **Method**: POST
+- **Method**: GET
 - **URL**: `/auth/me`
 - **Headers**: `Authorization: Bearer <access_token>`
 - **Notes**: Requires valid access token in Authorization header. Returns the authenticated user's profile.
@@ -306,6 +306,67 @@ Assuming the service is running on `http://localhost:3000`, all endpoints are pr
   }
   ```
 - **Status Codes**: 200 (OK), 401 (Unauthorized - Invalid or missing token)
+
+### 17. Get User Sessions
+- **Method**: GET
+- **URL**: `/auth/sessions`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Notes**: Returns all active sessions for the authenticated user.
+- **Response**:
+  ```json
+  [
+    {
+      "id": "session-uuid",
+      "userAgent": "Mozilla/5.0...",
+      "ipAddress": "192.168.1.1",
+      "createdAt": "2023-12-22T10:00:00.000Z",
+      "lastUsedAt": "2023-12-22T10:30:00.000Z",
+      "isCurrent": false
+    }
+  ]
+  ```
+- **Status Codes**: 200 (OK), 401 (Unauthorized)
+
+### 18. Logout Specific Session
+- **Method**: POST
+- **URL**: `/auth/logout-session`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Request Body**:
+  ```json
+  {
+    "sessionId": "session-uuid"
+  }
+  ```
+- **Notes**: Logs out a specific session. Cannot logout current session.
+- **Response**:
+  ```json
+  {
+    "message": "Session logged out successfully"
+  }
+  ```
+- **Status Codes**: 200 (OK), 400 (Bad Request), 401 (Unauthorized)
+
+### 19. Get All Users (Admin Only)
+- **Method**: GET
+- **URL**: `/auth/users`
+- **Headers**: `Authorization: Bearer <access_token>`
+- **Notes**: Requires ADMIN or OWNER role. Returns all users with basic information.
+- **Response**:
+  ```json
+  [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "John Doe",
+      "username": "johndoe",
+      "email": "john@example.com",
+      "role": "MEMBER",
+      "emailVerifiedAt": "2023-12-22T10:30:00.000Z",
+      "created_at": "2023-12-22T10:00:00.000Z",
+      "updated_at": "2023-12-22T10:00:00.000Z"
+    }
+  ]
+  ```
+- **Status Codes**: 200 (OK), 401 (Unauthorized), 403 (Forbidden)
 
 ## Token Information
 

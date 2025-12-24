@@ -10,7 +10,6 @@ exports.EmailVerificationModule = void 0;
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const email_verification_service_1 = require("./email-verification.service");
-const email_verification_controller_1 = require("./email-verification.controller");
 const user_entity_1 = require("../entities/user.entity");
 const email_verification_tokens_entity_1 = require("../entities/email-verification-tokens.entity");
 const audit_module_1 = require("../audit/audit.module");
@@ -24,7 +23,6 @@ exports.EmailVerificationModule = EmailVerificationModule = __decorate([
             audit_module_1.AuditModule,
         ],
         providers: [email_verification_service_1.EmailVerificationService],
-        controllers: [email_verification_controller_1.EmailVerificationController],
         exports: [email_verification_service_1.EmailVerificationService],
     })
 ], EmailVerificationModule);

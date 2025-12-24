@@ -104,6 +104,11 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    // Check if user account is banned
+    if (user.status === -1) {
+      throw new UnauthorizedException('Account is banned');
+    }
+
     // Check password
     const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
     if (!isPasswordValid) {

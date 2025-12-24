@@ -1,8 +1,8 @@
-// File: D:\PDev\MeoPanel\MeoPanel-Client\front-end\src\app\verify-email\page.tsx
-import * as entry from '../../../../src/app/verify-email/page.js'
+// File: D:\PDev\MeoPanel\MeoPanel-Client\front-end\src\app\settings\page.tsx
+import * as entry from '../../../../src/app/settings/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
-type TEntry = typeof import('../../../../src/app/verify-email/page.js')
+type TEntry = typeof import('../../../../src/app/settings/page.js')
 
 // Check that the entry is a valid entry
 checkFields<Diff<{

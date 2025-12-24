@@ -1,14 +1,10 @@
 'use client'
 
 import { useAuth } from '@/contexts/AuthContext'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
-import LoginPage from '@/components/LoginPage'
-import Dashboard from '@/components/Dashboard'
+import LandingPage from '@/components/LandingPage'
 
 export default function Home() {
   const { user, isLoading } = useAuth()
-  const router = useRouter()
 
   if (isLoading) {
     return (
@@ -18,9 +14,5 @@ export default function Home() {
     )
   }
 
-  if (!user) {
-    return <LoginPage />
-  }
-
-  return <Dashboard />
+  return <LandingPage user={user} />
 }

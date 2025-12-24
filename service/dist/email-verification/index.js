@@ -16,5 +16,4 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./email-verification.module"), exports);
 __exportStar(require("./email-verification.service"), exports);
-__exportStar(require("./email-verification.controller"), exports);
 //# sourceMappingURL=index.js.map

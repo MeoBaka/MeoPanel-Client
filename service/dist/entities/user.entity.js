@@ -45,6 +45,14 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "role", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 0 }),
+    __metadata("design:type", Number)
+], User.prototype, "status", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'int', default: 0, name: 'login_failed' }),
+    __metadata("design:type", Number)
+], User.prototype, "loginFailed", void 0);
+__decorate([
     (0, typeorm_1.CreateDateColumn)({ type: 'timestamp', nullable: true }),
     __metadata("design:type", Date)
 ], User.prototype, "created_at", void 0);
