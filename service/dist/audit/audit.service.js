@@ -86,6 +86,11 @@ let AuditService = class AuditService {
                 template: () => 'Two-factor backup code used',
                 isSuccess: true,
             },
+            [audit_logs_entity_1.AuditAction.TWO_FA_BACKUP_REGENERATED]: {
+                resource: audit_logs_entity_1.AuditResource.TWO_FA,
+                template: () => 'Two-factor backup codes regenerated',
+                isSuccess: true,
+            },
             [audit_logs_entity_1.AuditAction.SUSPICIOUS_ACTIVITY]: {
                 resource: audit_logs_entity_1.AuditResource.SYSTEM,
                 template: (details) => details,
@@ -168,6 +173,9 @@ let AuditService = class AuditService {
     }
     async logTwoFABackupUsed(userId, ipAddress, userAgent) {
         await this.logAction(audit_logs_entity_1.AuditAction.TWO_FA_BACKUP_USED, userId, [], { ipAddress, userAgent });
+    }
+    async logTwoFABackupRegenerated(userId, ipAddress, userAgent) {
+        await this.logAction(audit_logs_entity_1.AuditAction.TWO_FA_BACKUP_REGENERATED, userId, [], { ipAddress, userAgent });
     }
     async logSuspiciousActivity(userId, details, ipAddress, metadata) {
         await this.logAction(audit_logs_entity_1.AuditAction.SUSPICIOUS_ACTIVITY, userId, [details], { ipAddress, metadata });

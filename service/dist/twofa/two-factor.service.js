@@ -182,12 +182,24 @@ let TwoFactorService = class TwoFactorService {
         await this.auditService.logTwoFADisabled(userId);
         return { message: 'Two-factor authentication disabled successfully' };
     }
-    async regenerateBackupCodes(userId) {
+    async regenerateBackupCodes(userId, verificationToken, currentPassword) {
+        const authCredentials = await this.authCredentialsRepository.findOne({ where: { userId } });
+        if (!authCredentials) {
+            throw new common_1.BadRequestException('User credentials not found');
+        }
+        const isPasswordValid = await bcrypt.compare(currentPassword, authCredentials.passwordHash);
+        if (!isPasswordValid) {
+            throw new common_1.UnauthorizedException('Invalid current password');
+        }
         const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId, isEnabled: 1 },
         });
         if (!twoFactorAuth) {
             throw new common_1.BadRequestException('Two-factor authentication not enabled');
+        }
+        const isValidToken = await this.verifyTwoFactorCode(userId, verificationToken);
+        if (!isValidToken) {
+            throw new common_1.UnauthorizedException('Invalid verification token');
         }
         const backupCodes = this.generateBackupCodes();
         await this.twofaBackupCodeRepository.delete({ userId });
@@ -198,6 +210,7 @@ let TwoFactorService = class TwoFactorService {
             isUsed: 0,
         }));
         await this.twofaBackupCodeRepository.save(backupCodeEntities);
+        await this.auditService.logTwoFABackupRegenerated(userId);
         return { backupCodes };
     }
     async getTwoFactorStatus(userId) {

@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity';
 import { AuthCredentials } from '../entities/auth-credentials.entity';
@@ -223,18 +223,19 @@ export class AuthService {
 
     // Generate reset token
     const resetToken = crypto.randomBytes(64).toString('hex');
+    const hashedToken = await bcrypt.hash(resetToken, 10);
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiry
 
     const resetTokenEntity = this.passwordResetTokensRepository.create({
       userId: user.id,
-      token: resetToken,
+      token: hashedToken,
       expiresAt,
     });
     await this.passwordResetTokensRepository.save(resetTokenEntity);
 
     // Log reset token (since email sending is not implemented)
-    console.log(`Password reset token for ${email}: ${resetToken}`);
+    console.log(`Password reset token for ${email}: http://localhost:3000/reset-password?token=${resetToken}`);
 
     // Audit log password reset request
     await this.auditService.logPasswordResetRequest(email);
@@ -242,18 +243,36 @@ export class AuthService {
     return { message: 'If the email exists, a password reset link has been sent.' };
   }
 
-  async resetPassword(token: string, newPassword: string) {
-    const resetToken = await this.passwordResetTokensRepository.findOne({
-      where: { token },
+  async resetPassword(token: string, newPassword: string, confirmNewPassword: string) {
+    // Validate password confirmation
+    if (newPassword !== confirmNewPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
+    // Validate password strength
+    const passwordValidation = this.securityService.validatePassword(newPassword);
+    if (!passwordValidation.isValid) {
+      throw new BadRequestException(`Password validation failed: ${passwordValidation.errors.join(', ')}`);
+    }
+
+    // Find all non-expired reset tokens
+    const currentTime = new Date();
+    const resetTokens = await this.passwordResetTokensRepository.find({
+      where: { expiresAt: MoreThan(currentTime) },
       relations: ['user'],
     });
 
-    if (!resetToken) {
-      throw new UnauthorizedException('Invalid reset token');
+    let resetToken = null;
+    for (const rt of resetTokens) {
+      const isValid = await bcrypt.compare(token, rt.token);
+      if (isValid) {
+        resetToken = rt;
+        break;
+      }
     }
 
-    if (resetToken.expiresAt < new Date()) {
-      throw new UnauthorizedException('Reset token has expired');
+    if (!resetToken) {
+      throw new UnauthorizedException('Invalid reset token');
     }
 
     // Hash new password
@@ -262,7 +281,7 @@ export class AuthService {
 
     // Update password in auth_credentials
     const credentials = await this.authCredentialsRepository.findOne({
-      where: { userId: resetToken.userId },
+      where: { userId: resetToken.user.id },
     });
 
     if (!credentials) {
@@ -278,7 +297,7 @@ export class AuthService {
     console.log(`Password reset successful for user: ${resetToken.user.email}`);
 
     // Audit log password reset
-    await this.auditService.logPasswordReset(resetToken.userId);
+    await this.auditService.logPasswordReset(resetToken.user.id);
 
     return { message: 'Password has been reset successfully' };
   }

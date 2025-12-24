@@ -30,15 +30,16 @@ interface AuthContextType {
   getSessions: () => Promise<Session[]>
   logoutSession: (sessionId: string) => Promise<any>
   forgotPassword: (email: string) => Promise<any>
-  resetPassword: (token: string, newPassword: string) => Promise<any>
+  resetPassword: (token: string, newPassword: string, confirmNewPassword: string) => Promise<any>
   changePassword: (currentPassword: string, newPassword: string) => Promise<any>
   verifyEmail: (token: string) => Promise<any>
   resendVerification: (email: string) => Promise<any>
   setupTwoFactor: () => Promise<any>
   verifyTwoFactor: (token: string) => Promise<any>
   disableTwoFactor: (verificationToken: string, currentPassword: string) => Promise<any>
-  regenerateBackupCodes: () => Promise<any>
+  regenerateBackupCodes: (verificationToken: string, currentPassword: string) => Promise<any>
   getTwoFactorStatus: () => Promise<any>
+  cancelTwoFactor: () => void
   isLoading: boolean
   requiresTwoFactor: boolean
   twoFactorUserId: string | null
@@ -325,13 +326,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  const resetPassword = async (token: string, newPassword: string) => {
+  const resetPassword = async (token: string, newPassword: string, confirmNewPassword: string) => {
     const response = await fetch('http://localhost:5000/auth/reset-password', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ token, newPassword }),
+      body: JSON.stringify({ token, newPassword, confirmNewPassword }),
     })
 
     const data = await response.json()
@@ -364,7 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const verifyEmail = async (token: string) => {
-    const response = await fetch('http://localhost:5000/email-verification/verify', {
+    const response = await fetch('http://localhost:5000/auth/verify-email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -382,7 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const resendVerification = async (email: string) => {
-    const response = await fetch('http://localhost:5000/email-verification/resend', {
+    const response = await fetch('http://localhost:5000/auth/resend-verification', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -458,7 +459,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
-  const regenerateBackupCodes = async () => {
+  const regenerateBackupCodes = async (verificationToken: string, currentPassword: string) => {
     const token = localStorage.getItem('accessToken')
     const response = await fetch('http://localhost:5000/auth/2fa/regenerate-backup', {
       method: 'POST',
@@ -466,6 +467,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ verificationToken, currentPassword }),
     })
 
     const data = await response.json()
@@ -496,6 +498,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data
   }
 
+  const cancelTwoFactor = () => {
+    localStorage.removeItem('tempLogin')
+    setRequiresTwoFactor(false)
+    setTwoFactorUserId(null)
+  }
+
   const value: AuthContextType = {
     user,
     login,
@@ -514,6 +522,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     disableTwoFactor,
     regenerateBackupCodes,
     getTwoFactorStatus,
+    cancelTwoFactor,
     isLoading,
     requiresTwoFactor,
     twoFactorUserId,

@@ -33,7 +33,7 @@ export class EmailVerificationService {
     await this.emailVerificationTokensRepository.save(emailToken);
 
     // Log verification token (since email sending is not implemented)
-    console.log(`Email verification token for ${email}: ${verificationToken}`);
+    console.log(`Email verification link for ${email}: http://localhost:3000/verify-email?token=${verificationToken}`);
 
     // Audit log email verification sent
     await this.auditService.logEmailVerificationSent(userId, email);

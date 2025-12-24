@@ -37,7 +37,7 @@ let EmailVerificationService = class EmailVerificationService {
             expiresAt,
         });
         await this.emailVerificationTokensRepository.save(emailToken);
-        console.log(`Email verification token for ${email}: ${verificationToken}`);
+        console.log(`Email verification link for ${email}: http://localhost:3000/verify-email?token=${verificationToken}`);
         await this.auditService.logEmailVerificationSent(userId, email);
         return verificationToken;
     }

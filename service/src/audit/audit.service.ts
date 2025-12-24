@@ -110,6 +110,11 @@ export class AuditService {
       template: () => 'Two-factor backup code used',
       isSuccess: true,
     },
+    [AuditAction.TWO_FA_BACKUP_REGENERATED]: {
+      resource: AuditResource.TWO_FA,
+      template: () => 'Two-factor backup codes regenerated',
+      isSuccess: true,
+    },
     [AuditAction.SUSPICIOUS_ACTIVITY]: {
       resource: AuditResource.SYSTEM,
       template: (details: string) => details,
@@ -200,6 +205,10 @@ export class AuditService {
 
   async logTwoFABackupUsed(userId: string, ipAddress?: string, userAgent?: string): Promise<void> {
     await this.logAction(AuditAction.TWO_FA_BACKUP_USED, userId, [], { ipAddress, userAgent });
+  }
+
+  async logTwoFABackupRegenerated(userId: string, ipAddress?: string, userAgent?: string): Promise<void> {
+    await this.logAction(AuditAction.TWO_FA_BACKUP_REGENERATED, userId, [], { ipAddress, userAgent });
   }
 
   async logSuspiciousActivity(userId: string | undefined, details: string, ipAddress?: string, metadata?: any): Promise<void> {

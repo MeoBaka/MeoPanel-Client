@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Request, UseGuards, Get } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { TwoFactorService } from '../twofa/two-factor.service';
+import { EmailVerificationService } from '../email-verification/email-verification.service';
 import { JwtAuthGuard } from '../jwt';
 import { RolesGuard, Roles } from './security.service';
 import { UserRole } from '../entities/user.entity';
@@ -11,6 +12,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly twoFactorService: TwoFactorService,
+    private readonly emailVerificationService: EmailVerificationService,
   ) {}
 
   @Post('register')
@@ -40,8 +42,8 @@ export class AuthController {
   }
 
   @Post('reset-password')
-  async resetPassword(@Body() body: { token: string; newPassword: string }) {
-    return this.authService.resetPassword(body.token, body.newPassword);
+  async resetPassword(@Body() body: { token: string; newPassword: string; confirmNewPassword: string }) {
+    return this.authService.resetPassword(body.token, body.newPassword, body.confirmNewPassword);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -81,8 +83,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('2fa/regenerate-backup')
-  async regenerateBackupCodes(@Request() req) {
-    return this.twoFactorService.regenerateBackupCodes(req.user.id);
+  async regenerateBackupCodes(@Request() req, @Body() body: { verificationToken: string; currentPassword: string }) {
+    return this.twoFactorService.regenerateBackupCodes(req.user.id, body.verificationToken, body.currentPassword);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -108,6 +110,16 @@ export class AuthController {
   @Post('logout-session')
   async logoutSession(@Request() req, @Body() body: { sessionId: string }) {
     return this.authService.logoutSession(req.user.id, body.sessionId, req.user.sessionId);
+  }
+
+  @Post('verify-email')
+  async verifyEmail(@Body() body: { token: string }) {
+    return this.emailVerificationService.verifyEmail(body.token);
+  }
+
+  @Post('resend-verification')
+  async resendVerification(@Body() body: { email: string }) {
+    return this.emailVerificationService.resendVerification(body.email);
   }
 
 }

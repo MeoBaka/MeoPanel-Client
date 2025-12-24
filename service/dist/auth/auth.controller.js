@@ -16,14 +16,16 @@ exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
 const two_factor_service_1 = require("../twofa/two-factor.service");
+const email_verification_service_1 = require("../email-verification/email-verification.service");
 const jwt_1 = require("../jwt");
 const security_service_1 = require("./security.service");
 const user_entity_1 = require("../entities/user.entity");
 const dto_1 = require("../dto");
 let AuthController = class AuthController {
-    constructor(authService, twoFactorService) {
+    constructor(authService, twoFactorService, emailVerificationService) {
         this.authService = authService;
         this.twoFactorService = twoFactorService;
+        this.emailVerificationService = emailVerificationService;
     }
     async register(body) {
         return this.authService.register(body);
@@ -41,7 +43,7 @@ let AuthController = class AuthController {
         return this.authService.forgotPassword(body.email);
     }
     async resetPassword(body) {
-        return this.authService.resetPassword(body.token, body.newPassword);
+        return this.authService.resetPassword(body.token, body.newPassword, body.confirmNewPassword);
     }
     async changePassword(req, body) {
         return this.authService.changePassword(req.user.id, body.currentPassword, body.newPassword, req.ip, req.get('User-Agent'));
@@ -61,8 +63,8 @@ let AuthController = class AuthController {
     async disableTwoFactor(req, body) {
         return this.twoFactorService.disableTwoFactor(req.user.id, body.verificationToken, body.currentPassword);
     }
-    async regenerateBackupCodes(req) {
-        return this.twoFactorService.regenerateBackupCodes(req.user.id);
+    async regenerateBackupCodes(req, body) {
+        return this.twoFactorService.regenerateBackupCodes(req.user.id, body.verificationToken, body.currentPassword);
     }
     async getTwoFactorStatus(req) {
         return this.twoFactorService.getTwoFactorStatus(req.user.id);
@@ -75,6 +77,12 @@ let AuthController = class AuthController {
     }
     async logoutSession(req, body) {
         return this.authService.logoutSession(req.user.id, body.sessionId, req.user.sessionId);
+    }
+    async verifyEmail(body) {
+        return this.emailVerificationService.verifyEmail(body.token);
+    }
+    async resendVerification(body) {
+        return this.emailVerificationService.resendVerification(body.email);
     }
 };
 exports.AuthController = AuthController;
@@ -177,8 +185,9 @@ __decorate([
     (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
     (0, common_1.Post)('2fa/regenerate-backup'),
     __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "regenerateBackupCodes", null);
 __decorate([
@@ -214,9 +223,24 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logoutSession", null);
+__decorate([
+    (0, common_1.Post)('verify-email'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "verifyEmail", null);
+__decorate([
+    (0, common_1.Post)('resend-verification'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "resendVerification", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService,
-        two_factor_service_1.TwoFactorService])
+        two_factor_service_1.TwoFactorService,
+        email_verification_service_1.EmailVerificationService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

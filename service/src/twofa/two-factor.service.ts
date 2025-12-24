@@ -246,13 +246,30 @@ export class TwoFactorService {
     return { message: 'Two-factor authentication disabled successfully' };
   }
 
-  async regenerateBackupCodes(userId: string) {
+  async regenerateBackupCodes(userId: string, verificationToken: string, currentPassword: string) {
+    const authCredentials = await this.authCredentialsRepository.findOne({ where: { userId } });
+    if (!authCredentials) {
+      throw new BadRequestException('User credentials not found');
+    }
+
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, authCredentials.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid current password');
+    }
+
     const twoFactorAuth = await this.twofaAuthRepository.findOne({
       where: { userId, isEnabled: 1 },
     });
 
     if (!twoFactorAuth) {
       throw new BadRequestException('Two-factor authentication not enabled');
+    }
+
+    // Verify 2FA token (either TOTP or backup code)
+    const isValidToken = await this.verifyTwoFactorCode(userId, verificationToken);
+    if (!isValidToken) {
+      throw new UnauthorizedException('Invalid verification token');
     }
 
     const backupCodes = this.generateBackupCodes();
@@ -271,6 +288,9 @@ export class TwoFactorService {
       isUsed: 0,
     }));
     await this.twofaBackupCodeRepository.save(backupCodeEntities);
+
+    // Audit log backup codes regenerated
+    await this.auditService.logTwoFABackupRegenerated(userId);
 
     return { backupCodes };
   }

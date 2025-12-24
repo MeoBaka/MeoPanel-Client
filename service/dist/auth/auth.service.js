@@ -170,33 +170,47 @@ let AuthService = class AuthService {
         }
         await this.passwordResetTokensRepository.delete({ userId: user.id });
         const resetToken = crypto.randomBytes(64).toString('hex');
+        const hashedToken = await bcrypt.hash(resetToken, 10);
         const expiresAt = new Date();
         expiresAt.setHours(expiresAt.getHours() + 1);
         const resetTokenEntity = this.passwordResetTokensRepository.create({
             userId: user.id,
-            token: resetToken,
+            token: hashedToken,
             expiresAt,
         });
         await this.passwordResetTokensRepository.save(resetTokenEntity);
-        console.log(`Password reset token for ${email}: ${resetToken}`);
+        console.log(`Password reset token for ${email}: http://localhost:3000/reset-password?token=${resetToken}`);
         await this.auditService.logPasswordResetRequest(email);
         return { message: 'If the email exists, a password reset link has been sent.' };
     }
-    async resetPassword(token, newPassword) {
-        const resetToken = await this.passwordResetTokensRepository.findOne({
-            where: { token },
+    async resetPassword(token, newPassword, confirmNewPassword) {
+        if (newPassword !== confirmNewPassword) {
+            throw new common_1.BadRequestException('Passwords do not match');
+        }
+        const passwordValidation = this.securityService.validatePassword(newPassword);
+        if (!passwordValidation.isValid) {
+            throw new common_1.BadRequestException(`Password validation failed: ${passwordValidation.errors.join(', ')}`);
+        }
+        const currentTime = new Date();
+        const resetTokens = await this.passwordResetTokensRepository.find({
+            where: { expiresAt: (0, typeorm_2.MoreThan)(currentTime) },
             relations: ['user'],
         });
+        let resetToken = null;
+        for (const rt of resetTokens) {
+            const isValid = await bcrypt.compare(token, rt.token);
+            if (isValid) {
+                resetToken = rt;
+                break;
+            }
+        }
         if (!resetToken) {
             throw new common_1.UnauthorizedException('Invalid reset token');
-        }
-        if (resetToken.expiresAt < new Date()) {
-            throw new common_1.UnauthorizedException('Reset token has expired');
         }
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
         const credentials = await this.authCredentialsRepository.findOne({
-            where: { userId: resetToken.userId },
+            where: { userId: resetToken.user.id },
         });
         if (!credentials) {
             throw new common_1.UnauthorizedException('User credentials not found');
@@ -205,7 +219,7 @@ let AuthService = class AuthService {
         await this.authCredentialsRepository.save(credentials);
         await this.passwordResetTokensRepository.delete(resetToken.id);
         console.log(`Password reset successful for user: ${resetToken.user.email}`);
-        await this.auditService.logPasswordReset(resetToken.userId);
+        await this.auditService.logPasswordReset(resetToken.user.id);
         return { message: 'Password has been reset successfully' };
     }
     async changePassword(userId, currentPassword, newPassword, ipAddress, userAgent) {

@@ -14,6 +14,7 @@ export default function TwoFactorSetup() {
   const [showBackupCodes, setShowBackupCodes] = useState(false)
   const [showDisableConfirm, setShowDisableConfirm] = useState(false)
   const [showDisableVerification, setShowDisableVerification] = useState(false)
+  const [showRegenerateVerification, setShowRegenerateVerification] = useState(false)
   const [verificationToken, setVerificationToken] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
 
@@ -108,21 +109,35 @@ export default function TwoFactorSetup() {
     setCurrentPassword('')
   }
 
-  const handleRegenerateBackupCodes = async () => {
+  const handleRegenerateBackupCodes = () => {
+    setShowRegenerateVerification(true)
+  }
+
+  const confirmRegenerateBackupCodes = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsLoading(true)
     setError('')
     setSuccess('')
 
     try {
-      const result = await regenerateBackupCodes()
+      const result = await regenerateBackupCodes(verificationToken, currentPassword)
       setBackupCodes(result.backupCodes)
       setShowBackupCodes(true)
+      setShowRegenerateVerification(false)
+      setVerificationToken('')
+      setCurrentPassword('')
       setSuccess('Backup codes regenerated successfully.')
     } catch (err: any) {
       setError(err.message)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const cancelRegenerate = () => {
+    setShowRegenerateVerification(false)
+    setVerificationToken('')
+    setCurrentPassword('')
   }
 
   if (!twoFactorStatus) {
@@ -329,6 +344,79 @@ export default function TwoFactorSetup() {
                     className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
                   >
                     {isLoading ? 'Disabling...' : 'Disable 2FA'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate Backup Codes Verification Dialog */}
+      {showRegenerateVerification && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border border-gray-700 w-96 shadow-lg rounded-md bg-gray-800">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-white mb-4">
+                Regenerate Backup Codes
+              </h3>
+              <p className="text-sm text-gray-400 mb-4">
+                To regenerate backup codes, please provide your current password and either a 2FA code from your authenticator app or a backup code.
+              </p>
+
+              <form onSubmit={confirmRegenerateBackupCodes} className="space-y-4">
+                <div>
+                  <label htmlFor="regenerateVerificationToken" className="block text-sm font-medium text-gray-300">
+                    Verification Code
+                  </label>
+                  <input
+                    id="regenerateVerificationToken"
+                    type="text"
+                    required
+                    value={verificationToken}
+                    onChange={(e) => setVerificationToken(e.target.value.toUpperCase().slice(0, 8))}
+                    className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-2xl tracking-widest font-mono"
+                    placeholder="000000/ABC12345"
+                    maxLength={8}
+                  />
+                  <p className="mt-2 text-sm text-gray-500">
+                    Enter a 6-digit code from your authenticator or an 8-character backup code
+                  </p>
+                </div>
+
+                <div>
+                  <label htmlFor="regenerateCurrentPassword" className="block text-sm font-medium text-gray-300">
+                    Current Password
+                  </label>
+                  <input
+                    id="regenerateCurrentPassword"
+                    type="password"
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter your current password"
+                  />
+                </div>
+
+                {error && (
+                  <div className="text-red-400 text-sm bg-red-900 bg-opacity-20 border border-red-600 p-3 rounded">{error}</div>
+                )}
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <button
+                    type="button"
+                    onClick={cancelRegenerate}
+                    className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 border border-gray-600 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading || verificationToken.length < 6 || !currentPassword}
+                    className="px-4 py-2 text-sm font-medium text-white bg-yellow-600 border border-transparent rounded-md hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 disabled:opacity-50"
+                  >
+                    {isLoading ? 'Regenerating...' : 'Regenerate Codes'}
                   </button>
                 </div>
               </form>
