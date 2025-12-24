@@ -82,7 +82,25 @@ export default function Dashboard() {
 }
 
 function ProfileTab() {
-  const { user } = useAuth()
+  const { user, resendVerification } = useAuth()
+  const [resendMessage, setResendMessage] = useState('')
+  const [isResending, setIsResending] = useState(false)
+
+  const handleResendVerification = async () => {
+    if (!user?.email) return
+
+    setIsResending(true)
+    setResendMessage('')
+
+    try {
+      await resendVerification(user.email)
+      setResendMessage('Verification email sent. Please check your console for the link.')
+    } catch (error: any) {
+      setResendMessage(error.message || 'Failed to resend verification email.')
+    } finally {
+      setIsResending(false)
+    }
+  }
 
   if (!user) return null
 
@@ -101,7 +119,21 @@ function ProfileTab() {
           </div>
           <div>
             <dt className="text-sm font-medium text-gray-400">Email</dt>
-            <dd className="mt-1 text-sm text-white">{user.email}</dd>
+            <dd className="mt-1 text-sm text-white flex items-center gap-2">
+              {user.email}
+              {!user.emailVerifiedAt && (
+                <button
+                  onClick={handleResendVerification}
+                  disabled={isResending}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-2 py-1 rounded text-xs transition-colors"
+                >
+                  {isResending ? 'Sending...' : 'Resend Verification'}
+                </button>
+              )}
+            </dd>
+            {resendMessage && (
+              <p className="mt-1 text-xs text-blue-400">{resendMessage}</p>
+            )}
           </div>
           <div>
             <dt className="text-sm font-medium text-gray-400">Email Verified</dt>

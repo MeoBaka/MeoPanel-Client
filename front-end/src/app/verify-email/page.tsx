@@ -22,11 +22,9 @@ export default function VerifyEmailPage() {
       try {
         await verifyEmail(token)
         setStatus('success')
-        setMessage('Email verified successfully! You can now log in.')
-        // Redirect to home after 3 seconds
-        setTimeout(() => {
-          router.push('/')
-        }, 3000)
+        setMessage('Email verified successfully! Redirecting...')
+        // Redirect immediately
+        router.push('/')
       } catch (error: any) {
         setStatus('error')
         setMessage(error.message || 'Email verification failed. The token may be invalid or expired.')

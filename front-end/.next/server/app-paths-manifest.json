@@ -1,5 +1,4 @@
 {
   "/page": "app/page.js",
-  "/verify-email/page": "app/verify-email/page.js",
-  "/reset-password/page": "app/reset-password/page.js"
+  "/verify-email/page": "app/verify-email/page.js"
 }
