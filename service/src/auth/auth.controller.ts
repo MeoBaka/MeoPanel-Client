@@ -66,31 +66,31 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('2fa/setup')
   async setupTwoFactor(@Request() req) {
-    return this.twoFactorService.setupTwoFactor(req.user.id);
+    return this.twoFactorService.setupTwoFactor({ userId: req.user.id });
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('2fa/verify')
   async verifyTwoFactor(@Request() req, @Body() body: { token: string }) {
-    return this.twoFactorService.verifyAndEnableTwoFactor(req.user.id, body.token);
+    return this.twoFactorService.verifyAndEnableTwoFactor({ userId: req.user.id, token: body.token });
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('2fa/disable')
   async disableTwoFactor(@Request() req, @Body() body: { verificationToken: string; currentPassword: string }) {
-    return this.twoFactorService.disableTwoFactor(req.user.id, body.verificationToken, body.currentPassword);
+    return this.twoFactorService.disableTwoFactor({ userId: req.user.id, verificationToken: body.verificationToken, currentPassword: body.currentPassword });
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('2fa/regenerate-backup')
   async regenerateBackupCodes(@Request() req, @Body() body: { verificationToken: string; currentPassword: string }) {
-    return this.twoFactorService.regenerateBackupCodes(req.user.id, body.verificationToken, body.currentPassword);
+    return this.twoFactorService.regenerateBackupCodes({ userId: req.user.id, verificationToken: body.verificationToken, currentPassword: body.currentPassword });
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('2fa/status')
   async getTwoFactorStatus(@Request() req) {
-    return this.twoFactorService.getTwoFactorStatus(req.user.id);
+    return this.twoFactorService.getTwoFactorStatus({ userId: req.user.id });
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -114,12 +114,12 @@ export class AuthController {
 
   @Post('verify-email')
   async verifyEmail(@Body() body: { token: string }) {
-    return this.emailVerificationService.verifyEmail(body.token);
+    return this.emailVerificationService.verifyEmail({ token: body.token });
   }
 
   @Post('resend-verification')
   async resendVerification(@Body() body: { email: string }) {
-    return this.emailVerificationService.resendVerification(body.email);
+    return this.emailVerificationService.resendVerification({ email: body.email });
   }
 
 }

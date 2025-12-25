@@ -55,19 +55,19 @@ let AuthController = class AuthController {
         return this.authService.logoutAll(req.user.id);
     }
     async setupTwoFactor(req) {
-        return this.twoFactorService.setupTwoFactor(req.user.id);
+        return this.twoFactorService.setupTwoFactor({ userId: req.user.id });
     }
     async verifyTwoFactor(req, body) {
-        return this.twoFactorService.verifyAndEnableTwoFactor(req.user.id, body.token);
+        return this.twoFactorService.verifyAndEnableTwoFactor({ userId: req.user.id, token: body.token });
     }
     async disableTwoFactor(req, body) {
-        return this.twoFactorService.disableTwoFactor(req.user.id, body.verificationToken, body.currentPassword);
+        return this.twoFactorService.disableTwoFactor({ userId: req.user.id, verificationToken: body.verificationToken, currentPassword: body.currentPassword });
     }
     async regenerateBackupCodes(req, body) {
-        return this.twoFactorService.regenerateBackupCodes(req.user.id, body.verificationToken, body.currentPassword);
+        return this.twoFactorService.regenerateBackupCodes({ userId: req.user.id, verificationToken: body.verificationToken, currentPassword: body.currentPassword });
     }
     async getTwoFactorStatus(req) {
-        return this.twoFactorService.getTwoFactorStatus(req.user.id);
+        return this.twoFactorService.getTwoFactorStatus({ userId: req.user.id });
     }
     async getAllUsers() {
         return this.authService.getAllUsers();
@@ -79,10 +79,10 @@ let AuthController = class AuthController {
         return this.authService.logoutSession(req.user.id, body.sessionId, req.user.sessionId);
     }
     async verifyEmail(body) {
-        return this.emailVerificationService.verifyEmail(body.token);
+        return this.emailVerificationService.verifyEmail({ token: body.token });
     }
     async resendVerification(body) {
-        return this.emailVerificationService.resendVerification(body.email);
+        return this.emailVerificationService.resendVerification({ email: body.email });
     }
 };
 exports.AuthController = AuthController;

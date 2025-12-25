@@ -18,4 +18,13 @@ __exportStar(require("./create-user.dto"), exports);
 __exportStar(require("./update-user.dto"), exports);
 __exportStar(require("./register.dto"), exports);
 __exportStar(require("./login.dto"), exports);
+__exportStar(require("./generate-verification-token.dto"), exports);
+__exportStar(require("./verify-email.dto"), exports);
+__exportStar(require("./resend-verification.dto"), exports);
+__exportStar(require("./setup-two-factor.dto"), exports);
+__exportStar(require("./verify-and-enable-two-factor.dto"), exports);
+__exportStar(require("./disable-two-factor.dto"), exports);
+__exportStar(require("./regenerate-backup-codes.dto"), exports);
+__exportStar(require("./get-two-factor-status.dto"), exports);
+__exportStar(require("./audit-log.dto"), exports);
 //# sourceMappingURL=index.js.map

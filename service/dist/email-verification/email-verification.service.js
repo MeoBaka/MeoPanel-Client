@@ -26,7 +26,8 @@ let EmailVerificationService = class EmailVerificationService {
         this.emailVerificationTokensRepository = emailVerificationTokensRepository;
         this.auditService = auditService;
     }
-    async generateVerificationToken(userId, email) {
+    async generateVerificationToken(dto) {
+        const { userId, email } = dto;
         await this.emailVerificationTokensRepository.delete({ userId });
         const verificationToken = crypto.randomBytes(64).toString('hex');
         const expiresAt = new Date();
@@ -41,7 +42,8 @@ let EmailVerificationService = class EmailVerificationService {
         await this.auditService.logEmailVerificationSent(userId, email);
         return verificationToken;
     }
-    async verifyEmail(token) {
+    async verifyEmail(dto) {
+        const { token } = dto;
         const verificationToken = await this.emailVerificationTokensRepository.findOne({
             where: { token },
             relations: ['user'],
@@ -60,7 +62,8 @@ let EmailVerificationService = class EmailVerificationService {
         await this.auditService.logEmailVerified(verificationToken.userId, verificationToken.user.email);
         return { message: 'Email verified successfully' };
     }
-    async resendVerification(email) {
+    async resendVerification(dto) {
+        const { email } = dto;
         const user = await this.userRepository.findOne({ where: { email } });
         if (!user) {
             throw new common_1.UnauthorizedException('User not found');
@@ -68,7 +71,7 @@ let EmailVerificationService = class EmailVerificationService {
         if (user.emailVerifiedAt) {
             throw new common_1.ConflictException('Email is already verified');
         }
-        await this.generateVerificationToken(user.id, email);
+        await this.generateVerificationToken({ userId: user.id, email });
         return { message: 'Verification token sent. Please check console for the token.' };
     }
 };
