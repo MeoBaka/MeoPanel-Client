@@ -1,0 +1,16 @@
+{
+  "name": "meopanel-monorepo",
+  "private": true,
+  "workspaces": [
+    "front-end",
+    "service"
+  ],
+  "devDependencies": {
+    "turbo": "^1.10.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start"
+  }
+}
