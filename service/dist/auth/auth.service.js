@@ -66,7 +66,7 @@ let AuthService = class AuthService {
             passwordHash,
         });
         await this.authCredentialsRepository.save(authCredentials);
-        await this.emailVerificationService.generateVerificationToken(user.id, email);
+        await this.emailVerificationService.generateVerificationToken({ userId: user.id, email });
         await this.auditService.logUserRegistration(user.id, email);
         return { message: 'User registered successfully. Please check console for verification token.' };
     }
@@ -92,7 +92,7 @@ let AuthService = class AuthService {
             await this.auditService.logFailedLogin(usernameOrEmail, 'Invalid password', ipAddress, userAgent);
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
-        const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus(user.id);
+        const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus({ userId: user.id });
         if (twoFactorStatus.isEnabled) {
             if (!twoFactorCode) {
                 return {
@@ -101,7 +101,7 @@ let AuthService = class AuthService {
                     message: 'Two-factor authentication required',
                 };
             }
-            const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode(user.id, twoFactorCode);
+            const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode({ userId: user.id, token: twoFactorCode });
             if (!isTwoFactorValid) {
                 throw new common_1.UnauthorizedException('Invalid two-factor code');
             }

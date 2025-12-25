@@ -62,7 +62,8 @@ let TwoFactorService = class TwoFactorService {
             window: 2,
         });
     }
-    async setupTwoFactor(userId) {
+    async setupTwoFactor(dto) {
+        const { userId } = dto;
         const existing = await this.twofaAuthRepository.findOne({
             where: { userId },
         });
@@ -100,7 +101,8 @@ let TwoFactorService = class TwoFactorService {
             qrCode: qrCodeDataUrl,
         };
     }
-    async verifyAndEnableTwoFactor(userId, token) {
+    async verifyAndEnableTwoFactor(dto) {
+        const { userId, token } = dto;
         const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId },
         });
@@ -131,7 +133,8 @@ let TwoFactorService = class TwoFactorService {
             backupCodes,
         };
     }
-    async verifyTwoFactorCode(userId, token) {
+    async verifyTwoFactorCode(dto) {
+        const { userId, token } = dto;
         const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId, isEnabled: 1 },
         });
@@ -155,7 +158,8 @@ let TwoFactorService = class TwoFactorService {
         }
         return false;
     }
-    async disableTwoFactor(userId, verificationToken, currentPassword) {
+    async disableTwoFactor(dto) {
+        const { userId, verificationToken, currentPassword } = dto;
         const authCredentials = await this.authCredentialsRepository.findOne({ where: { userId } });
         if (!authCredentials) {
             throw new common_1.BadRequestException('User credentials not found');
@@ -170,7 +174,7 @@ let TwoFactorService = class TwoFactorService {
         if (!twoFactorAuth) {
             throw new common_1.BadRequestException('Two-factor authentication not set up');
         }
-        const isValidToken = await this.verifyTwoFactorCode(userId, verificationToken);
+        const isValidToken = await this.verifyTwoFactorCode({ userId, token: verificationToken });
         if (!isValidToken) {
             throw new common_1.UnauthorizedException('Invalid verification token');
         }
@@ -182,7 +186,8 @@ let TwoFactorService = class TwoFactorService {
         await this.auditService.logTwoFADisabled(userId);
         return { message: 'Two-factor authentication disabled successfully' };
     }
-    async regenerateBackupCodes(userId, verificationToken, currentPassword) {
+    async regenerateBackupCodes(dto) {
+        const { userId, verificationToken, currentPassword } = dto;
         const authCredentials = await this.authCredentialsRepository.findOne({ where: { userId } });
         if (!authCredentials) {
             throw new common_1.BadRequestException('User credentials not found');
@@ -197,7 +202,7 @@ let TwoFactorService = class TwoFactorService {
         if (!twoFactorAuth) {
             throw new common_1.BadRequestException('Two-factor authentication not enabled');
         }
-        const isValidToken = await this.verifyTwoFactorCode(userId, verificationToken);
+        const isValidToken = await this.verifyTwoFactorCode({ userId, token: verificationToken });
         if (!isValidToken) {
             throw new common_1.UnauthorizedException('Invalid verification token');
         }
@@ -213,7 +218,8 @@ let TwoFactorService = class TwoFactorService {
         await this.auditService.logTwoFABackupRegenerated(userId);
         return { backupCodes };
     }
-    async getTwoFactorStatus(userId) {
+    async getTwoFactorStatus(dto) {
+        const { userId } = dto;
         const twoFactorAuth = await this.twofaAuthRepository.findOne({
             where: { userId },
         });

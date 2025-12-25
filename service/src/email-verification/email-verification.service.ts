@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import { User } from '../entities/user.entity';
 import { EmailVerificationTokens } from '../entities/email-verification-tokens.entity';
 import { AuditService } from '../audit/audit.service';
+import { GenerateVerificationTokenDto, VerifyEmailDto, ResendVerificationDto } from '../dto';
 
 @Injectable()
 export class EmailVerificationService {
@@ -16,7 +17,8 @@ export class EmailVerificationService {
     private auditService: AuditService,
   ) {}
 
-  async generateVerificationToken(userId: string, email: string) {
+  async generateVerificationToken(dto: GenerateVerificationTokenDto) {
+    const { userId, email } = dto;
     // Delete any existing verification tokens for this user
     await this.emailVerificationTokensRepository.delete({ userId });
 
@@ -41,7 +43,8 @@ export class EmailVerificationService {
     return verificationToken;
   }
 
-  async verifyEmail(token: string) {
+  async verifyEmail(dto: VerifyEmailDto) {
+    const { token } = dto;
     const verificationToken = await this.emailVerificationTokensRepository.findOne({
       where: { token },
       relations: ['user'],
@@ -71,7 +74,8 @@ export class EmailVerificationService {
     return { message: 'Email verified successfully' };
   }
 
-  async resendVerification(email: string) {
+  async resendVerification(dto: ResendVerificationDto) {
+    const { email } = dto;
     // Find user by email
     const user = await this.userRepository.findOne({ where: { email } });
     if (!user) {
@@ -84,7 +88,7 @@ export class EmailVerificationService {
     }
 
     // Generate new token
-    await this.generateVerificationToken(user.id, email);
+    await this.generateVerificationToken({ userId: user.id, email });
 
     return { message: 'Verification token sent. Please check console for the token.' };
   }

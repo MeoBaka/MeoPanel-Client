@@ -75,7 +75,7 @@ export class AuthService {
     await this.authCredentialsRepository.save(authCredentials);
 
     // Generate email verification token
-    await this.emailVerificationService.generateVerificationToken(user.id, email);
+    await this.emailVerificationService.generateVerificationToken({ userId: user.id, email });
 
     // Audit log user registration
     await this.auditService.logUserRegistration(user.id, email);
@@ -118,7 +118,7 @@ export class AuthService {
     }
 
     // Check if 2FA is enabled
-    const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus(user.id);
+    const twoFactorStatus = await this.twoFactorService.getTwoFactorStatus({ userId: user.id });
 
     if (twoFactorStatus.isEnabled) {
       // 2FA is enabled, require 2FA code
@@ -131,7 +131,7 @@ export class AuthService {
       }
 
       // Verify 2FA code
-      const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode(user.id, twoFactorCode);
+      const isTwoFactorValid = await this.twoFactorService.verifyTwoFactorCode({ userId: user.id, token: twoFactorCode });
       if (!isTwoFactorValid) {
         throw new UnauthorizedException('Invalid two-factor code');
       }
