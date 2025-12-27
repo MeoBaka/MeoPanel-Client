@@ -2,21 +2,34 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-// import WServerTab from '@/components/WServerTab'
-// import PM2Tab from '@/components/PM2Tab'
-// import InstanceTab from '@/components/InstanceTab'
+import { useState, useEffect } from 'react'
+import WServerTab from '@/components/WServerTab'
+import PM2Tab from '@/components/PM2Tab'
+import InstanceTab from '@/components/InstanceTab'
 
 export default function Dashboard() {
-  const { user, logout } = useAuth()
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const [activeTab, setActiveTab] = useState('wserver')
-  const router = useRouter()
+   const { user, logout, isLoading } = useAuth()
+   const [showUserMenu, setShowUserMenu] = useState(false)
+   const [activeTab, setActiveTab] = useState('wserver')
+   const router = useRouter()
 
-  if (!user) {
-    router.push('/')
-    return null
-  }
+   useEffect(() => {
+     if (!isLoading && !user) {
+       router.push('/')
+     }
+   }, [user, isLoading, router])
+
+   if (isLoading) {
+     return (
+       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+       </div>
+     )
+   }
+
+   if (!user) {
+     return null
+   }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -122,24 +135,9 @@ export default function Dashboard() {
 
           {/* Tab Content */}
           <div className="tab-content">
-            {activeTab === 'wserver' && (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-medium text-white mb-4">WServer Management</h3>
-                <p className="text-gray-400">WServer management interface will be implemented here.</p>
-              </div>
-            )}
-            {activeTab === 'pm2' && (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-medium text-white mb-4">PM2 Management</h3>
-                <p className="text-gray-400">PM2 management features coming soon...</p>
-              </div>
-            )}
-            {activeTab === 'instance' && (
-              <div className="text-center py-12">
-                <h3 className="text-lg font-medium text-white mb-4">Instance Management</h3>
-                <p className="text-gray-400">Instance management features coming soon...</p>
-              </div>
-            )}
+            {activeTab === 'wserver' && <WServerTab />}
+            {activeTab === 'pm2' && <PM2Tab />}
+            {activeTab === 'instance' && <InstanceTab />}
           </div>
         </div>
       </main>
