@@ -72,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const checkAuth = async (retryCount = 0) => {
+    if (typeof window === 'undefined') return
+
     try {
       const token = localStorage.getItem('accessToken')
       if (token) {
@@ -116,6 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshToken = async (retryCount = 0) => {
+    if (typeof window === 'undefined') return
+
     try {
       const refreshTokenValue = localStorage.getItem('refreshToken')
       if (!refreshTokenValue) {
@@ -193,15 +197,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (data.requiresTwoFactor) {
       // Store login credentials temporarily for 2FA verification
-      localStorage.setItem('tempLogin', JSON.stringify({ email, password }))
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tempLogin', JSON.stringify({ email, password }))
+      }
       setRequiresTwoFactor(true)
       setTwoFactorUserId(data.userId)
       return data
     }
 
     // Successful login
-    localStorage.setItem('accessToken', data.accessToken)
-    localStorage.setItem('refreshToken', data.refreshToken)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('accessToken', data.accessToken)
+      localStorage.setItem('refreshToken', data.refreshToken)
+    }
     setUser(data.user)
     setRequiresTwoFactor(false)
     setTwoFactorUserId(null)
@@ -229,21 +237,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (refreshToken) {
-        await fetch('http://localhost:5000/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ refreshToken }),
-        })
+      if (typeof window !== 'undefined') {
+        const refreshToken = localStorage.getItem('refreshToken')
+        if (refreshToken) {
+          await fetch('http://localhost:5000/auth/logout', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ refreshToken }),
+          })
+        }
       }
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+      }
       setUser(null)
       setRequiresTwoFactor(false)
       setTwoFactorUserId(null)
@@ -252,19 +264,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutAll = async () => {
     try {
-      const token = localStorage.getItem('accessToken')
-      await fetch('http://localhost:5000/auth/logout-all', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('accessToken')
+        await fetch('http://localhost:5000/auth/logout-all', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+      }
     } catch (error) {
       console.error('Logout all error:', error)
     } finally {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+      }
       setUser(null)
       setRequiresTwoFactor(false)
       setTwoFactorUserId(null)
@@ -272,6 +288,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const getSessions = async (): Promise<Session[]> => {
+    if (typeof window === 'undefined') return []
+
     const token = localStorage.getItem('accessToken')
     const response = await fetch('http://localhost:5000/auth/sessions', {
       headers: {
@@ -500,7 +518,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const cancelTwoFactor = () => {
-    localStorage.removeItem('tempLogin')
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('tempLogin')
+    }
     setRequiresTwoFactor(false)
     setTwoFactorUserId(null)
   }

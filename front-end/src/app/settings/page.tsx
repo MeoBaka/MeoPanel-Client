@@ -6,45 +6,35 @@ import TwoFactorSetup from '@/components/TwoFactorSetup'
 import ChangePasswordForm from '@/components/ChangePasswordForm'
 import SessionList from '@/components/SessionList'
 import { useRouter } from 'next/navigation'
+import Header from '@/components/Header'
+
+export const dynamic = 'force-dynamic'
 
 type TabType = 'profile' | 'security' | '2fa'
 
 export default function Settings() {
   const { user, logout, logoutAll } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('profile')
+  const [isMounted, setIsMounted] = useState(false)
   const router = useRouter()
 
-  if (!user) {
-    router.push('/')
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && isMounted && !user) {
+      router.push('/')
+    }
+  }, [user, router, isMounted])
+
+  if (!isMounted || !user) {
     return null
   }
 
   return (
     <div className="min-h-screen bg-gray-900">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <button
-                onClick={() => router.push('/')}
-                className="text-2xl font-bold text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                MeoPanel Client
-              </button>
-            </div>
-            <nav className="flex space-x-4">
-              <span className="text-sm text-gray-300">Welcome, {user.name || user.username}</span>
-              <button
-                onClick={logout}
-                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors"
-              >
-                Logout
-              </button>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <Header user={user} logout={logout} />
 
       <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">

@@ -14,6 +14,7 @@ interface WServer {
 
 interface PM2Process {
   name: string
+  pid: number
   pm_id: number
   monit: {
     memory: number
@@ -34,6 +35,13 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
   const [wservers, setWservers] = useState<WServer[]>([])
   const [pm2Data, setPm2Data] = useState<Record<string, PM2Process[]>>({})
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connecting' | 'online' | 'offline'>>({})
+  const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null)
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
   const wsRefs = useRef<Record<string, WebSocket>>({})
   const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
 
@@ -279,16 +287,21 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Memory</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Uptime</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">↻</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
                   {processes.map((process) => (
-                    <tr key={`${wserver.id}-${process.pm_id}`}>
+                    <tr
+                      key={`${wserver.id}-${process.pm_id}`}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setContextMenu({ x: e.clientX, y: e.clientY, process, serverId: wserver.id })
+                      }}
+                    >
                       <td className="px-4 py-2 text-white">{wserver.servername}</td>
                       <td className="px-4 py-2 text-white">{process.pm_id}</td>
                       <td className="px-4 py-2 text-white">{process.name}</td>
-                      <td className="px-4 py-2 text-white">N/A</td>
+                      <td className="px-4 py-2 text-white">{process.pid}</td>
                       <td className="px-4 py-2 text-white">
                         <span className={`px-2 py-1 rounded text-xs ${
                           process.pm2_env.status === 'online' ? 'bg-green-600 text-white' :
@@ -300,46 +313,13 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                       </td>
                       <td className="px-4 py-2 text-white">{process.monit.cpu.toFixed(1)}%</td>
                       <td className="px-4 py-2 text-white">{formatBytes(process.monit.memory)}</td>
-                      <td className="px-4 py-2 text-white">{formatUptime(process.pm2_env.pm_uptime)}</td>
+                      <td className="px-4 py-2 text-white">{process.pm2_env.status === 'online' ? formatUptime(Date.now() - process.pm2_env.pm_uptime) : 'N/A'}</td>
                       <td className="px-4 py-2 text-white">{process.pm2_env.restart_time}</td>
-                      <td className="px-4 py-2 text-white">
-                        <div className="flex space-x-1">
-                          {process.pm2_env.status === 'online' ? (
-                            <>
-                              <button
-                                onClick={() => handleAction(wserver.id, 'restart', process.name)}
-                                className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded text-xs"
-                              >
-                                Restart
-                              </button>
-                              <button
-                                onClick={() => handleAction(wserver.id, 'stop', process.name)}
-                                className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs"
-                              >
-                                Stop
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => handleAction(wserver.id, 'start', process.name)}
-                              className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs"
-                            >
-                              Start
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleAction(wserver.id, 'delete', process.name)}
-                            className="bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded text-xs"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   ))}
                   {processes.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
+                      <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
                         No PM2 processes found or connecting...
                       </td>
                     </tr>
@@ -353,6 +333,55 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
 
       {wservers.length === 0 && (
         <p className="text-gray-400 text-center py-8">No servers configured. Add servers in the WServer tab.</p>
+      )}
+
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          {contextMenu.process.pm2_env.status === 'online' ? (
+            <>
+              <button
+                onClick={() => {
+                  handleAction(contextMenu.serverId, 'restart', contextMenu.process.name)
+                  setContextMenu(null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                Restart
+              </button>
+              <button
+                onClick={() => {
+                  handleAction(contextMenu.serverId, 'stop', contextMenu.process.name)
+                  setContextMenu(null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                Stop
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => {
+                handleAction(contextMenu.serverId, 'start', contextMenu.process.name)
+                setContextMenu(null)
+              }}
+              className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+            >
+              Start
+            </button>
+          )}
+          <button
+            onClick={() => {
+              handleAction(contextMenu.serverId, 'delete', contextMenu.process.name)
+              setContextMenu(null)
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
+          >
+            Delete
+          </button>
+        </div>
       )}
     </div>
   )
