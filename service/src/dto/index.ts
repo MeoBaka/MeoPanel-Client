@@ -11,3 +11,5 @@ export * from './disable-two-factor.dto';
 export * from './regenerate-backup-codes.dto';
 export * from './get-two-factor-status.dto';
 export * from './audit-log.dto';
+export * from './create-wserver.dto';
+export * from './update-wserver.dto';

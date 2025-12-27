@@ -27,4 +27,6 @@ __exportStar(require("./disable-two-factor.dto"), exports);
 __exportStar(require("./regenerate-backup-codes.dto"), exports);
 __exportStar(require("./get-two-factor-status.dto"), exports);
 __exportStar(require("./audit-log.dto"), exports);
+__exportStar(require("./create-wserver.dto"), exports);
+__exportStar(require("./update-wserver.dto"), exports);
 //# sourceMappingURL=index.js.map

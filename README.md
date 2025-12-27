@@ -38,6 +38,11 @@ A full-stack web application providing secure user authentication, management, a
   - Settings management
   - Session overview
 
+- **Wserver Management**
+  - CRUD operations for wservers
+  - Secure server configuration storage
+  - UUID-based identification
+
 ## Tech Stack
 
 ### Frontend
@@ -161,9 +166,17 @@ A full-stack web application providing secure user authentication, management, a
 - `PUT /users/:uuid` - Update user
 - `DELETE /users/:uuid` - Delete user
 
+### Wserver Management
+- `GET /wservers` - Get all wservers
+- `GET /wservers/:id` - Get wserver by server-uuid
+- `POST /wservers` - Create wserver
+- `PUT /wservers/:id` - Update wserver
+- `DELETE /wservers/:id` - Delete wserver
+
 For detailed API documentation, see:
 - [Authentication API](docs/auth.md)
 - [User API](docs/user.md)
+- [Wserver API](docs/wserver.md)
 
 ## Project Structure
 
@@ -180,6 +193,7 @@ MeoPanel-Client/
 │   ├── src/
 │   │   ├── auth/       # Authentication module
 │   │   ├── user/       # User management module
+│   │   ├── wserver/    # Wserver management module
 │   │   ├── email-verification/ # Email verification
 │   │   ├── twofa/      # Two-factor authentication
 │   │   ├── entities/   # TypeORM entities
@@ -204,6 +218,7 @@ The application uses TypeORM with the following main entities:
 - **EmailVerificationTokens** - Email verification tokens
 - **PasswordResetTokens** - Password reset tokens
 - **AuditLogs** - Security audit logs
+- **Wserver** - Wserver configurations with secure UUID and token storage
 
 ## Security Considerations
 
