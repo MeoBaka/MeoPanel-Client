@@ -6,11 +6,12 @@ import { useState, useEffect } from 'react'
 import WServerTab from '@/components/WServerTab'
 import PM2Tab from '@/components/PM2Tab'
 import InstanceTab from '@/components/InstanceTab'
+import UserManagerTab from '@/components/UserManagerTab'
 
 export default function Dashboard() {
    const { user, logout, isLoading } = useAuth()
    const [showUserMenu, setShowUserMenu] = useState(false)
-   const [activeTab, setActiveTab] = useState('wserver')
+   const [activeTab, setActiveTab] = useState('pm2')
    const router = useRouter()
 
    useEffect(() => {
@@ -18,6 +19,17 @@ export default function Dashboard() {
        router.push('/')
      }
    }, [user, isLoading, router])
+
+   useEffect(() => {
+     if (user) {
+       const hasWServerAccess = user.role === 'ADMIN' || user.role === 'OWNER'
+       if (hasWServerAccess && activeTab === 'pm2') {
+         setActiveTab('wserver')
+       } else if (!hasWServerAccess && activeTab === 'wserver') {
+         setActiveTab('pm2')
+       }
+     }
+   }, [user, activeTab])
 
    if (isLoading) {
      return (
@@ -99,16 +111,18 @@ export default function Dashboard() {
           <div className="mb-8">
             <div className="border-b border-gray-700">
               <nav className="-mb-px flex space-x-8">
-                <button
-                  onClick={() => setActiveTab('wserver')}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'wserver'
-                      ? 'border-blue-500 text-blue-400'
-                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
-                  }`}
-                >
-                  WServer
-                </button>
+                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                  <button
+                    onClick={() => setActiveTab('wserver')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'wserver'
+                        ? 'border-blue-500 text-blue-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    WServer
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveTab('pm2')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
@@ -129,15 +143,28 @@ export default function Dashboard() {
                 >
                   Instance
                 </button>
+                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                  <button
+                    onClick={() => setActiveTab('usermanager')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'usermanager'
+                        ? 'border-blue-500 text-blue-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    User Manager
+                  </button>
+                )}
               </nav>
             </div>
           </div>
 
           {/* Tab Content */}
           <div className="tab-content">
-            {activeTab === 'wserver' && <WServerTab />}
+            {activeTab === 'wserver' && user && (user.role === 'ADMIN' || user.role === 'OWNER') && <WServerTab />}
             {activeTab === 'pm2' && <PM2Tab />}
             {activeTab === 'instance' && <InstanceTab />}
+            {activeTab === 'usermanager' && user && (user.role === 'ADMIN' || user.role === 'OWNER') && <UserManagerTab />}
           </div>
         </div>
       </main>

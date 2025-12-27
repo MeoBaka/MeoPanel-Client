@@ -39,6 +39,14 @@ let UserService = class UserService {
         await this.userRepository.update(id, userData);
         return this.findOne(id);
     }
+    async updateRole(id, roleData) {
+        await this.userRepository.update(id, { role: roleData.role });
+        return this.findOne(id);
+    }
+    async updateStatus(id, statusData) {
+        await this.userRepository.update(id, { status: statusData.status });
+        return this.findOne(id);
+    }
     async remove(id) {
         await this.userRepository.delete(id);
     }

@@ -2,7 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
-import { CreateUserDto, UpdateUserDto } from '../dto';
+import { CreateUserDto, UpdateUserDto, UpdateUserRoleDto, UpdateUserStatusDto } from '../dto';
 
 @Injectable()
 export class UserService {
@@ -30,6 +30,16 @@ export class UserService {
 
   async update(id: string, userData: UpdateUserDto): Promise<User> {
     await this.userRepository.update(id, userData);
+    return this.findOne(id);
+  }
+
+  async updateRole(id: string, roleData: UpdateUserRoleDto): Promise<User> {
+    await this.userRepository.update(id, { role: roleData.role });
+    return this.findOne(id);
+  }
+
+  async updateStatus(id: string, statusData: UpdateUserStatusDto): Promise<User> {
+    await this.userRepository.update(id, { status: statusData.status });
     return this.findOne(id);
   }
 
