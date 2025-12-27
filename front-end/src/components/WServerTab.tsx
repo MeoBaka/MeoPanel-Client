@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface WServer {
@@ -13,9 +13,36 @@ interface WServer {
   updatedAt: string
 }
 
+interface ServerStatus {
+  connection_address: string
+  memory: {
+    total: number
+    used: number
+    free: number
+  }
+  cpu: {
+    cores: number
+    usage: number
+  }
+  disk_space: {
+    used: number
+    max: number
+    allow: number
+  }
+  total_instances: number
+  running_instances: number
+  stopped_instances: number
+  platform: string
+  version: {
+    node: string
+    server: string
+  }
+}
+
 export default function WServerTab() {
   const { user } = useAuth()
   const [wservers, setWservers] = useState<WServer[]>([])
+  const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({})
   const [showAddModal, setShowAddModal] = useState(false)
   const [formData, setFormData] = useState({
     servername: '',
@@ -24,10 +51,28 @@ export default function WServerTab() {
     token: ''
   })
   const [loading, setLoading] = useState(false)
+  const wsRefs = useRef<Record<string, WebSocket>>({})
 
   useEffect(() => {
     fetchWservers()
   }, [])
+
+  useEffect(() => {
+    // Connect to WebSocket for each wserver
+    wservers.forEach(wserver => {
+      connectToServer(wserver)
+    })
+
+    return () => {
+      // Cleanup WebSocket connections
+      Object.values(wsRefs.current).forEach(ws => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close()
+        }
+      })
+      wsRefs.current = {}
+    }
+  }, [wservers])
 
   const fetchWservers = async () => {
     try {
@@ -92,6 +137,56 @@ export default function WServerTab() {
     }
   }
 
+  const connectToServer = (wserver: WServer) => {
+    if (wsRefs.current[wserver.id]) {
+      wsRefs.current[wserver.id].close()
+    }
+
+    // Convert HTTP URL to WebSocket URL
+    const wsUrl = wserver.url.replace(/^http/, 'ws')
+
+    const ws = new WebSocket(wsUrl)
+
+    ws.onopen = () => {
+      // Send authentication message
+      const authMessage = {
+        uuid: wserver.uuid,
+        token: wserver.token
+      }
+      ws.send(JSON.stringify(authMessage))
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const data: ServerStatus = JSON.parse(event.data)
+        setServerStatuses(prev => ({
+          ...prev,
+          [wserver.id]: data
+        }))
+      } catch (error) {
+        console.error('Failed to parse server status:', error)
+      }
+    }
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error for server', wserver.servername, error)
+    }
+
+    ws.onclose = () => {
+      // Optionally reconnect after some time
+      setTimeout(() => connectToServer(wserver), 5000)
+    }
+
+    wsRefs.current[wserver.id] = ws
+  }
+
+  const formatBytes = (bytes: number) => {
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    if (bytes === 0) return '0 Bytes'
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -104,30 +199,85 @@ export default function WServerTab() {
         </button>
       </div>
 
-      <div className="grid gap-4">
-        {wservers.map((wserver) => (
-          <div key={wserver.id} className="bg-gray-800 p-4 rounded-md flex justify-between items-center">
-            <div>
-              <h4 className="text-white font-medium">{wserver.servername}</h4>
-              <p className="text-gray-400 text-sm">{wserver.url}</p>
-              <p className="text-gray-400 text-sm">UUID: server-uuid</p>
+      <div className="grid gap-6">
+        {wservers.map((wserver) => {
+          const status = serverStatuses[wserver.id]
+          return (
+            <div key={wserver.id} className="bg-gray-800 p-6 rounded-md">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h4 className="text-white font-medium text-lg">{wserver.servername}</h4>
+                  <p className="text-gray-400 text-sm">UUID: server-uuid</p>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => console.log('Edit', wserver.id)}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded-md text-sm"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(wserver.id)}
+                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              {status ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-400">Connection Address:</span>
+                    <p className="text-white">{status.connection_address}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Server Status:</span>
+                    <p className="text-green-400">Online</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Memory:</span>
+                    <p className="text-white">
+                      Used: {formatBytes(status.memory.used)} / Total: {formatBytes(status.memory.total)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">CPU:</span>
+                    <p className="text-white">{status.cpu.cores} cores, {status.cpu.usage}% usage</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Disk Space:</span>
+                    <p className="text-white">
+                      Used: {formatBytes(status.disk_space.used)} / Max: {formatBytes(status.disk_space.max)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Instances Status:</span>
+                    <p className="text-white">
+                      Total: {status.total_instances}, Running: {status.running_instances}, Stopped: {status.stopped_instances}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">PM2 Status:</span>
+                    <p className="text-white">N/A</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Platform:</span>
+                    <p className="text-white">{status.platform}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Version:</span>
+                    <p className="text-white">Node: {status.version.node}, Server: {status.version.server}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-gray-400">Connecting to server...</p>
+                </div>
+              )}
             </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => console.log('Edit', wserver.id)}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded-md text-sm"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDelete(wserver.id)}
-                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
         {wservers.length === 0 && (
           <p className="text-gray-400 text-center py-8">No wservers found. Click "Add WServer" to add your first server.</p>
         )}
