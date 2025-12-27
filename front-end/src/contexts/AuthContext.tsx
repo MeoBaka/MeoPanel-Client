@@ -9,6 +9,7 @@ interface User {
   email: string
   emailVerifiedAt?: string
   role: string
+  status: number
   created_at: string
   updated_at: string
 }

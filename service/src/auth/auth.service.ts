@@ -106,7 +106,7 @@ export class AuthService {
 
     // Check if user account is banned
     if (user.status === -1) {
-      throw new UnauthorizedException('Account is banned');
+      throw new UnauthorizedException('Your account has been banned or suspended, please contact the administrator.');
     }
 
     // Check password

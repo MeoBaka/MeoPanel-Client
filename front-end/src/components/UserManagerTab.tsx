@@ -203,11 +203,12 @@ export default function UserManagerTab() {
                       onChange={(e) => setEditForm({ ...editForm, status: parseInt(e.target.value) })}
                       className="bg-gray-700 text-white px-2 py-1 rounded"
                     >
+                      <option value={-1}>Banned</option>
                       <option value={0}>Inactive</option>
                       <option value={1}>Active</option>
                     </select>
                   ) : (
-                    u.status === 0 ? 'Inactive' : 'Active'
+                    u.status === -1 ? 'Banned' : u.status === 0 ? 'Inactive' : 'Active'
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-gray-300">

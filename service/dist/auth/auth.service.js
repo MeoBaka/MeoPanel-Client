@@ -85,7 +85,7 @@ let AuthService = class AuthService {
             throw new common_1.UnauthorizedException('User not found');
         }
         if (user.status === -1) {
-            throw new common_1.UnauthorizedException('Account is banned');
+            throw new common_1.UnauthorizedException('Your account has been banned or suspended, please contact the administrator.');
         }
         const isPasswordValid = await bcrypt.compare(password, credentials.passwordHash);
         if (!isPasswordValid) {
