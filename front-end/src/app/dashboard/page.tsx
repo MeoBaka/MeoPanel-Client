@@ -11,7 +11,12 @@ import UserManagerTab from '@/components/UserManagerTab'
 export default function Dashboard() {
    const { user, logout, isLoading } = useAuth()
    const [showUserMenu, setShowUserMenu] = useState(false)
-   const [activeTab, setActiveTab] = useState('pm2')
+   const [activeTab, setActiveTab] = useState(() => {
+     if (typeof window !== 'undefined') {
+       return localStorage.getItem('activeTab') || 'pm2'
+     }
+     return 'pm2'
+   })
    const router = useRouter()
 
    useEffect(() => {
@@ -23,13 +28,16 @@ export default function Dashboard() {
    useEffect(() => {
      if (user) {
        const hasWServerAccess = user.role === 'ADMIN' || user.role === 'OWNER'
-       if (hasWServerAccess && activeTab === 'pm2') {
-         setActiveTab('wserver')
-       } else if (!hasWServerAccess && activeTab === 'wserver') {
+       if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager')) {
          setActiveTab('pm2')
        }
      }
    }, [user, activeTab])
+
+   const handleTabChange = (tab: string) => {
+     setActiveTab(tab)
+     localStorage.setItem('activeTab', tab)
+   }
 
    if (isLoading) {
      return (
@@ -113,7 +121,7 @@ export default function Dashboard() {
               <nav className="-mb-px flex space-x-8">
                 {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
                   <button
-                    onClick={() => setActiveTab('wserver')}
+                    onClick={() => handleTabChange('wserver')}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'wserver'
                         ? 'border-blue-500 text-blue-400'
@@ -124,7 +132,7 @@ export default function Dashboard() {
                   </button>
                 )}
                 <button
-                  onClick={() => setActiveTab('pm2')}
+                  onClick={() => handleTabChange('pm2')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'pm2'
                       ? 'border-blue-500 text-blue-400'
@@ -134,7 +142,7 @@ export default function Dashboard() {
                   PM2
                 </button>
                 <button
-                  onClick={() => setActiveTab('instance')}
+                  onClick={() => handleTabChange('instance')}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === 'instance'
                       ? 'border-blue-500 text-blue-400'
@@ -145,7 +153,7 @@ export default function Dashboard() {
                 </button>
                 {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
                   <button
-                    onClick={() => setActiveTab('usermanager')}
+                    onClick={() => handleTabChange('usermanager')}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'usermanager'
                         ? 'border-blue-500 text-blue-400'
@@ -161,10 +169,22 @@ export default function Dashboard() {
 
           {/* Tab Content */}
           <div className="tab-content">
-            {activeTab === 'wserver' && user && (user.role === 'ADMIN' || user.role === 'OWNER') && <WServerTab />}
-            {activeTab === 'pm2' && <PM2Tab />}
-            {activeTab === 'instance' && <InstanceTab />}
-            {activeTab === 'usermanager' && user && (user.role === 'ADMIN' || user.role === 'OWNER') && <UserManagerTab />}
+            {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+              <div className={activeTab === 'wserver' ? '' : 'hidden'}>
+                <WServerTab activeTab={activeTab} />
+              </div>
+            )}
+            <div className={activeTab === 'pm2' ? '' : 'hidden'}>
+              <PM2Tab activeTab={activeTab} />
+            </div>
+            <div className={activeTab === 'instance' ? '' : 'hidden'}>
+              <InstanceTab activeTab={activeTab} />
+            </div>
+            {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+              <div className={activeTab === 'usermanager' ? '' : 'hidden'}>
+                <UserManagerTab activeTab={activeTab} />
+              </div>
+            )}
           </div>
         </div>
       </main>

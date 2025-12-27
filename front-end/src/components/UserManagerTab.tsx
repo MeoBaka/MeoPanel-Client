@@ -14,7 +14,11 @@ interface User {
   updated_at: string
 }
 
-export default function UserManagerTab() {
+interface UserManagerTabProps {
+  activeTab: string
+}
+
+export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
   const { user } = useAuth()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)

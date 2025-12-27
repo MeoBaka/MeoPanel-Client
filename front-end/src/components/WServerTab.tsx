@@ -44,7 +44,11 @@ interface ServerStatus {
 
 type ConnectionStatus = 'connecting' | 'online' | 'offline'
 
-export default function WServerTab() {
+interface WServerTabProps {
+  activeTab: string
+}
+
+export default function WServerTab({ activeTab }: WServerTabProps) {
   const { user } = useAuth()
   const [wservers, setWservers] = useState<WServer[]>([])
   const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({})
@@ -58,6 +62,8 @@ export default function WServerTab() {
   })
   const [loading, setLoading] = useState(false)
   const wsRefs = useRef<Record<string, WebSocket>>({})
+  const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
+  const pingIntervals = useRef<Record<string, NodeJS.Timeout>>({})
 
   useEffect(() => {
     fetchWservers()
@@ -70,15 +76,62 @@ export default function WServerTab() {
     })
 
     return () => {
-      // Cleanup WebSocket connections
+      // Cleanup WebSocket connections and intervals
       Object.values(wsRefs.current).forEach(ws => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.close()
         }
       })
+      Object.values(updateIntervals.current).forEach(clearInterval)
+      Object.values(pingIntervals.current).forEach(clearInterval)
       wsRefs.current = {}
+      updateIntervals.current = {}
+      pingIntervals.current = {}
     }
   }, [wservers])
+
+  useEffect(() => {
+    // Start or stop update intervals based on activeTab
+    wservers.forEach(wserver => {
+      const ws = wsRefs.current[wserver.id]
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        if (activeTab === 'wserver') {
+          // Start update interval if not already running
+          if (!updateIntervals.current[wserver.id]) {
+            updateIntervals.current[wserver.id] = setInterval(() => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
+              } else {
+                clearInterval(updateIntervals.current[wserver.id])
+                delete updateIntervals.current[wserver.id]
+              }
+            }, 10000)
+          }
+          // Start ping interval if not already running
+          if (!pingIntervals.current[wserver.id]) {
+            pingIntervals.current[wserver.id] = setInterval(() => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send('ping')
+              } else {
+                clearInterval(pingIntervals.current[wserver.id])
+                delete pingIntervals.current[wserver.id]
+              }
+            }, 30000)
+          }
+        } else {
+          // Stop intervals when not active
+          if (updateIntervals.current[wserver.id]) {
+            clearInterval(updateIntervals.current[wserver.id])
+            delete updateIntervals.current[wserver.id]
+          }
+          if (pingIntervals.current[wserver.id]) {
+            clearInterval(pingIntervals.current[wserver.id])
+            delete pingIntervals.current[wserver.id]
+          }
+        }
+      }
+    })
+  }, [activeTab, wservers])
 
   const fetchWservers = async () => {
     try {
@@ -173,23 +226,7 @@ export default function WServerTab() {
       }
       ws.send(JSON.stringify(authMessage))
 
-      // Send periodic status updates
-      const updateInterval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ command: 'status' }))
-        } else {
-          clearInterval(updateInterval)
-        }
-      }, 10000) // Request status update every 10 seconds
-
-      // Send periodic ping to keep connection alive (less frequent)
-      const pingInterval = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send('ping')
-        } else {
-          clearInterval(pingInterval)
-        }
-      }, 30000) // Ping every 30 seconds
+      // Intervals are managed by useEffect based on activeTab
     }
 
     ws.onmessage = (event) => {
