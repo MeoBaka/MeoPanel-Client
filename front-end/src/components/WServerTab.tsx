@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface WServer {
-  id: string
+  id: string // This is the server_uuid for display
   servername: string
   url: string
-  uuid: string
+  uuid: string // This is for WebSocket authentication only
   token: string
   createdAt: string
   updatedAt: string
@@ -32,6 +32,9 @@ interface ServerStatus {
   total_instances: number
   running_instances: number
   stopped_instances: number
+  total_pm2: number
+  running_pm2: number
+  stopped_pm2: number
   platform: string
   version: {
     node: string
@@ -39,10 +42,13 @@ interface ServerStatus {
   }
 }
 
+type ConnectionStatus = 'connecting' | 'online' | 'offline'
+
 export default function WServerTab() {
   const { user } = useAuth()
   const [wservers, setWservers] = useState<WServer[]>([])
   const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({})
+  const [connectionStatuses, setConnectionStatuses] = useState<Record<string, ConnectionStatus>>({})
   const [showAddModal, setShowAddModal] = useState(false)
   const [formData, setFormData] = useState({
     servername: '',
@@ -138,9 +144,21 @@ export default function WServerTab() {
   }
 
   const connectToServer = (wserver: WServer) => {
-    if (wsRefs.current[wserver.id]) {
+    // Don't create a new connection if one is already active
+    if (wsRefs.current[wserver.id] && wsRefs.current[wserver.id].readyState === WebSocket.OPEN) {
+      return
+    }
+
+    // Close existing connection if it's in a bad state
+    if (wsRefs.current[wserver.id] && wsRefs.current[wserver.id].readyState !== WebSocket.CLOSED) {
       wsRefs.current[wserver.id].close()
     }
+
+    // Set connecting status
+    setConnectionStatuses(prev => ({
+      ...prev,
+      [wserver.id]: 'connecting'
+    }))
 
     // Convert HTTP URL to WebSocket URL
     const wsUrl = wserver.url.replace(/^http/, 'ws')
@@ -154,27 +172,73 @@ export default function WServerTab() {
         token: wserver.token
       }
       ws.send(JSON.stringify(authMessage))
+
+      // Send periodic status updates
+      const updateInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ command: 'status' }))
+        } else {
+          clearInterval(updateInterval)
+        }
+      }, 10000) // Request status update every 10 seconds
+
+      // Send periodic ping to keep connection alive (less frequent)
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send('ping')
+        } else {
+          clearInterval(pingInterval)
+        }
+      }, 30000) // Ping every 30 seconds
     }
 
     ws.onmessage = (event) => {
       try {
-        const data: ServerStatus = JSON.parse(event.data)
+        const message = event.data
+
+        // Try to parse as JSON first
+        const parsedMessage = JSON.parse(message)
+
+        // Check if it's a ping response
+        if (parsedMessage.pong && parsedMessage.status === 'ok') {
+          // Handle ping response - connection is healthy
+          return
+        }
+
+        // Otherwise, treat as server status data
+        const data: ServerStatus = parsedMessage
         setServerStatuses(prev => ({
           ...prev,
           [wserver.id]: data
         }))
+        setConnectionStatuses(prev => ({
+          ...prev,
+          [wserver.id]: 'online'
+        }))
       } catch (error) {
-        console.error('Failed to parse server status:', error)
+        console.error('Failed to parse server message:', error)
+        setConnectionStatuses(prev => ({
+          ...prev,
+          [wserver.id]: 'offline'
+        }))
       }
     }
 
     ws.onerror = (error) => {
       console.error('WebSocket error for server', wserver.servername, error)
+      setConnectionStatuses(prev => ({
+        ...prev,
+        [wserver.id]: 'offline'
+      }))
     }
 
-    ws.onclose = () => {
-      // Optionally reconnect after some time
-      setTimeout(() => connectToServer(wserver), 5000)
+    ws.onclose = (event) => {
+      console.log('WebSocket closed for server', wserver.servername, 'code:', event.code)
+      setConnectionStatuses(prev => ({
+        ...prev,
+        [wserver.id]: 'offline'
+      }))
+      // Note: No automatic reconnection - connection stays closed until page refresh or manual reconnect
     }
 
     wsRefs.current[wserver.id] = ws
@@ -202,12 +266,15 @@ export default function WServerTab() {
       <div className="grid gap-6">
         {wservers.map((wserver) => {
           const status = serverStatuses[wserver.id]
+          const connectionStatus = connectionStatuses[wserver.id] || 'connecting'
+          const isOffline = connectionStatus === 'offline'
+
           return (
             <div key={wserver.id} className="bg-gray-800 p-6 rounded-md">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h4 className="text-white font-medium text-lg">{wserver.servername}</h4>
-                  <p className="text-gray-400 text-sm">UUID: server-uuid</p>
+                  <p className="text-gray-400 text-sm">Server UUID: {wserver.id}</p>
                 </div>
                 <div className="flex space-x-2">
                   <button
@@ -225,56 +292,63 @@ export default function WServerTab() {
                 </div>
               </div>
 
-              {status ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-400">Connection Address:</span>
-                    <p className="text-white">{status.connection_address}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Server Status:</span>
-                    <p className="text-green-400">Online</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Memory:</span>
-                    <p className="text-white">
-                      Used: {formatBytes(status.memory.used)} / Total: {formatBytes(status.memory.total)}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">CPU:</span>
-                    <p className="text-white">{status.cpu.cores} cores, {status.cpu.usage}% usage</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Disk Space:</span>
-                    <p className="text-white">
-                      Used: {formatBytes(status.disk_space.used)} / Max: {formatBytes(status.disk_space.max)}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Instances Status:</span>
-                    <p className="text-white">
-                      Total: {status.total_instances}, Running: {status.running_instances}, Stopped: {status.stopped_instances}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">PM2 Status:</span>
-                    <p className="text-white">N/A</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Platform:</span>
-                    <p className="text-white">{status.platform}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-400">Version:</span>
-                    <p className="text-white">Node: {status.version.node}, Server: {status.version.server}</p>
-                  </div>
+              <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm ${isOffline ? 'opacity-50' : ''}`}>
+                <div>
+                  <span className="text-gray-400">Connection Address:</span>
+                  <p className="text-white">{status?.connection_address || 'N/A'}</p>
                 </div>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-gray-400">Connecting to server...</p>
+                <div>
+                  <span className="text-gray-400">Server Status:</span>
+                  <p className={`font-medium ${
+                    connectionStatus === 'online' ? 'text-green-400' :
+                    connectionStatus === 'connecting' ? 'text-yellow-400' :
+                    'text-red-400'
+                  }`}>
+                    {connectionStatus === 'connecting' ? 'Connecting...' :
+                     connectionStatus === 'online' ? 'Online' : 'Offline'}
+                  </p>
                 </div>
-              )}
+                {status && (
+                  <>
+                    <div>
+                      <span className="text-gray-400">Memory:</span>
+                      <p className="text-white">
+                        Used: {formatBytes(status.memory.used)} / Total: {formatBytes(status.memory.total)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">CPU:</span>
+                      <p className="text-white">{status.cpu.cores} cores, {status.cpu.usage}% usage</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Disk Space:</span>
+                      <p className="text-white">
+                        Used: {formatBytes(status.disk_space.used)} / Max: {formatBytes(status.disk_space.max)}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Instances Status:</span>
+                      <p className="text-white">
+                        Total: {status.total_instances}, Running: {status.running_instances}, Stopped: {status.stopped_instances}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">PM2 Status:</span>
+                      <p className="text-white">
+                        Total: {status.total_pm2}, Running: {status.running_pm2}, Stopped: {status.stopped_pm2}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Platform:</span>
+                      <p className="text-white">{status.platform}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-400">Version:</span>
+                      <p className="text-white">Node: {status.version.node}, Server: {status.version.server}</p>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           )
         })}
