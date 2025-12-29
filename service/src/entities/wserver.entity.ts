@@ -11,7 +11,7 @@ export class Wserver {
   @Column({ type: 'varchar', length: 500 })
   url: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
+  @Column({ type: 'varchar', length: 255 })
   uuid: string;
 
   @Column({ type: 'varchar', length: 500 })

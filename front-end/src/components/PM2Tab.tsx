@@ -45,6 +45,10 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [notes, setNotes] = useState<Record<string, Record<string, string>>>({})
   const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
+  const [isDragging, setIsDragging] = useState(false)
+  const [hasDragged, setHasDragged] = useState(false)
+  const [dragStart, setDragStart] = useState<{serverId: string, processName: string} | null>(null)
+  const [dragEnd, setDragEnd] = useState<{serverId: string, processName: string} | null>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const logsListenerRef = useRef<((event: MessageEvent) => void) | null>(null)
@@ -266,15 +270,12 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
   }
 
   const formatUptime = (ms: number) => {
-    if (!ms) return 'N/A'
-    const seconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const hours = Math.floor(minutes / 60)
-    const days = Math.floor(hours / 24)
-    if (days > 0) return `${days}d ${hours % 24}h`
-    if (hours > 0) return `${hours}h ${minutes % 60}m`
-    if (minutes > 0) return `${minutes}m ${seconds % 60}s`
-    return `${seconds}s`
+    if (!ms || ms <= 0) return '--:--:--'
+    const totalSeconds = Math.floor(ms / 1000)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   }
 
   const getServerStats = (processes: PM2Process[]) => {
@@ -283,6 +284,80 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     const stopped = processes.filter(p => p.pm2_env.status === 'stopped').length
     const error = processes.filter(p => p.pm2_env.status === 'errored').length
     return { total, running, stopped, error }
+  }
+
+  const getTotalSelected = () => {
+    return Object.values(selectedProcesses).reduce((total, set) => total + set.size, 0)
+  }
+
+  const getSelectedList = () => {
+    const list: {serverName: string, processName: string}[] = []
+    wservers.forEach(wserver => {
+      const selected = selectedProcesses[wserver.id] || new Set()
+      selected.forEach(processName => {
+        list.push({ serverName: wserver.servername, processName })
+      })
+    })
+    return list
+  }
+
+  const getAllProcessesInOrder = () => {
+    const all: {serverId: string, process: PM2Process, index: number}[] = []
+    let globalIndex = 0
+    wservers.forEach(wserver => {
+      const processes = pm2Data[wserver.id] || []
+      processes.forEach(process => {
+        all.push({ serverId: wserver.id, process, index: globalIndex++ })
+      })
+    })
+    return all
+  }
+
+  const handleMouseDown = (serverId: string, processName: string) => {
+    setIsDragging(true)
+    setHasDragged(false)
+    setDragStart({ serverId, processName })
+    setDragEnd({ serverId, processName })
+  }
+
+  const handleMouseEnter = (serverId: string, processName: string) => {
+    if (isDragging) {
+      setHasDragged(true)
+      setDragEnd({ serverId, processName })
+    }
+  }
+
+  const handleMouseUp = () => {
+    if (isDragging && dragStart) {
+      if (hasDragged && dragEnd) {
+        // Toggle range
+        const allProcesses = getAllProcessesInOrder()
+        const startProcess = allProcesses.find(p => p.serverId === dragStart.serverId && p.process.name === dragStart.processName)
+        const endProcess = allProcesses.find(p => p.serverId === dragEnd.serverId && p.process.name === dragEnd.processName)
+        if (startProcess && endProcess) {
+          const startIndex = Math.min(startProcess.index, endProcess.index)
+          const endIndex = Math.max(startProcess.index, endProcess.index)
+          const processesToToggle = allProcesses.slice(startIndex, endIndex + 1)
+          const newSelected = { ...selectedProcesses }
+          processesToToggle.forEach(({ serverId, process }) => {
+            if (!newSelected[serverId]) newSelected[serverId] = new Set()
+            if (newSelected[serverId].has(process.name)) {
+              newSelected[serverId].delete(process.name)
+            } else {
+              newSelected[serverId].add(process.name)
+            }
+          })
+          setSelectedProcesses(newSelected)
+        }
+      } else {
+        // Toggle single
+        handleCheckboxChange(dragStart.serverId, dragStart.processName, !selectedProcesses[dragStart.serverId]?.has(dragStart.processName))
+      }
+    }
+    setIsDragging(false)
+    setHasDragged(false)
+    setDragStart(null)
+    setDragEnd(null)
   }
 
   const handleAction = async (serverId: string, action: string, process: PM2Process) => {
@@ -311,41 +386,55 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     }
   }
 
-  const handleBulkAction = async (serverId: string, action: string) => {
-    const selected = selectedProcesses[serverId] || new Set()
-    if (selected.size === 0) return
+  const handleBulkAction = async (action: string) => {
+    const totalSelected = getTotalSelected()
+    if (totalSelected === 0) return
 
-    const ws = wsRefs.current[serverId]
-    const wserver = wservers.find(s => s.id === serverId)
-    if (ws && ws.readyState === WebSocket.OPEN && wserver) {
-      const command = `pm2-multi-${action}`
-      const message: any = {
-        command,
-        uuid: wserver.uuid,
-        token: wserver.token
+    // Group selected processes by server
+    const serverGroups: Record<string, string[]> = {}
+    wservers.forEach(wserver => {
+      const selected = selectedProcesses[wserver.id] || new Set()
+      if (selected.size > 0) {
+        serverGroups[wserver.id] = Array.from(selected)
       }
-      if (action === 'start') {
-        const processes = Array.from(selected).map(name => {
-          const proc = pm2Data[serverId].find(p => p.name === name)
-          return proc ? { script: proc.name, name: proc.name } : null
-        }).filter(Boolean)
-        message.processes = processes
-      } else {
-        const ids = Array.from(selected).map(name => {
-          const proc = pm2Data[serverId].find(p => p.name === name)
-          return proc ? proc.pm_id : null
-        }).filter(Boolean) as number[]
-        message.ids = ids
-      }
-      ws.send(JSON.stringify(message))
-      // Clear selection and refresh the list
-      setSelectedProcesses(prev => ({ ...prev, [serverId]: new Set() }))
-      setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ command: 'pm2-list', uuid: wserver.uuid, token: wserver.token }))
+    })
+
+    // Send commands to each server
+    Object.entries(serverGroups).forEach(([serverId, processNames]) => {
+      const ws = wsRefs.current[serverId]
+      const wserver = wservers.find(s => s.id === serverId)
+      if (ws && ws.readyState === WebSocket.OPEN && wserver) {
+        const command = `pm2-multi-${action}`
+        const message: any = {
+          command,
+          uuid: wserver.uuid,
+          token: wserver.token
         }
-      }, 1000)
-    }
+        if (action === 'start') {
+          const processes = processNames.map(name => {
+            const proc = pm2Data[serverId].find(p => p.name === name)
+            return proc ? { script: proc.name, name: proc.name } : null
+          }).filter(Boolean)
+          message.processes = processes
+        } else {
+          const ids = processNames.map(name => {
+            const proc = pm2Data[serverId].find(p => p.name === name)
+            return proc ? proc.pm_id : null
+          }).filter(Boolean) as number[]
+          message.ids = ids
+        }
+        ws.send(JSON.stringify(message))
+        // Refresh the list for this server
+        setTimeout(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ command: 'pm2-list', uuid: wserver.uuid, token: wserver.token }))
+          }
+        }, 1000)
+      }
+    })
+
+    // Clear all selections
+    setSelectedProcesses({})
   }
 
   const handleGlobalAction = async (serverId: string, action: string) => {
@@ -491,9 +580,53 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     }
   }
 
+  const handleGlobalSelect = (status: string) => {
+    let newSelected: Record<string, Set<string>> = {}
+    if (status === 'all') {
+      wservers.forEach(wserver => {
+        const processes = pm2Data[wserver.id] || []
+        newSelected[wserver.id] = new Set(processes.map(p => p.name))
+      })
+    } else if (status === 'running') {
+      wservers.forEach(wserver => {
+        const processes = pm2Data[wserver.id] || []
+        newSelected[wserver.id] = new Set(processes.filter(p => p.pm2_env.status === 'online').map(p => p.name))
+      })
+    } else if (status === 'stopped') {
+      wservers.forEach(wserver => {
+        const processes = pm2Data[wserver.id] || []
+        newSelected[wserver.id] = new Set(processes.filter(p => p.pm2_env.status === 'stopped').map(p => p.name))
+      })
+    } else if (status === 'error') {
+      wservers.forEach(wserver => {
+        const processes = pm2Data[wserver.id] || []
+        newSelected[wserver.id] = new Set(processes.filter(p => p.pm2_env.status === 'errored').map(p => p.name))
+      })
+    } else if (status === 'unselect') {
+      newSelected = {}
+    }
+    setSelectedProcesses(newSelected)
+  }
+
   return (
     <div>
-      <h3 className="text-lg font-medium text-white mb-4">PM2 Management</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-medium text-white">PM2 Management</h3>
+        <div className="flex items-center">
+          <span className="text-gray-300 text-sm mr-2">Global Select:</span>
+          <select
+            onChange={(e) => handleGlobalSelect(e.target.value)}
+            className="bg-gray-700 text-gray-300 text-sm rounded px-2 py-1"
+          >
+            <option value="">Select...</option>
+            <option value="all">All</option>
+            <option value="running">Online</option>
+            <option value="stopped">Stopped</option>
+            <option value="error">Error</option>
+            <option value="unselect">Unselect All</option>
+          </select>
+        </div>
+      </div>
 
       {notification && (
         <div className={`mb-4 p-3 rounded ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white`}>
@@ -563,7 +696,7 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                       >
                         <option value="">☑</option>
                         <option value="all">All</option>
-                        <option value="running">Running</option>
+                        <option value="running">Online</option>
                         <option value="stopped">Stopped</option>
                         <option value="error">Error</option>
                         <option value="unselect">Unselect</option>
@@ -588,6 +721,9 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                         e.preventDefault()
                         setContextMenu({ x: e.clientX, y: e.clientY, process, serverId: wserver.id })
                       }}
+                      onMouseDown={() => handleMouseDown(wserver.id, process.name)}
+                      onMouseEnter={() => handleMouseEnter(wserver.id, process.name)}
+                      onMouseUp={handleMouseUp}
                     >
                       <td className="px-2 py-2 text-white">
                         <input
@@ -655,44 +791,56 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                 </tbody>
               </table>
             </div>
-
-           <div className="p-4">
-             <div className="flex gap-2">
-               <button
-                 onClick={() => handleBulkAction(wserver.id, 'start')}
-                 className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
-                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
-               >
-                 Start Selected
-               </button>
-               <button
-                 onClick={() => handleBulkAction(wserver.id, 'stop')}
-                 className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
-                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
-               >
-                 Stop Selected
-               </button>
-               <button
-                 onClick={() => handleBulkAction(wserver.id, 'restart')}
-                 className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
-                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
-               >
-                 Restart Selected
-               </button>
-               <button
-                 onClick={() => handleBulkAction(wserver.id, 'delete')}
-                 className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50"
-                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
-               >
-                 Delete Selected
-               </button>
-             </div>
-           </div>
             </>
             )}
           </div>
         )
       })}
+
+      {getTotalSelected() > 0 && (
+        <div className="mt-8 bg-gray-800 rounded-lg p-4">
+          <h4 className="text-white font-medium mb-4">Selected Processes ({getTotalSelected()})</h4>
+          <div className="mb-4 max-h-32 overflow-y-auto">
+            {getSelectedList().map((item, index) => (
+              <div key={index} className="text-gray-300 text-sm">
+                {item.serverName} - {item.processName}
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleBulkAction('start')}
+              className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+            >
+              Start Selected
+            </button>
+            <button
+              onClick={() => handleBulkAction('stop')}
+              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+            >
+              Stop Selected
+            </button>
+            <button
+              onClick={() => handleBulkAction('restart')}
+              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+            >
+              Restart Selected
+            </button>
+            <button
+              onClick={() => handleBulkAction('delete')}
+              className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+            >
+              Delete Selected
+            </button>
+            <button
+              onClick={() => setSelectedProcesses({})}
+              className="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
 
       {wservers.length === 0 && (
         <p className="text-gray-400 text-center py-8">No servers configured. Add servers in the WServer tab.</p>

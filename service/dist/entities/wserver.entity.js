@@ -27,7 +27,7 @@ __decorate([
     __metadata("design:type", String)
 ], Wserver.prototype, "url", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'varchar', length: 255, unique: true }),
+    (0, typeorm_1.Column)({ type: 'varchar', length: 255 }),
     __metadata("design:type", String)
 ], Wserver.prototype, "uuid", void 0);
 __decorate([
