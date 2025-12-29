@@ -44,12 +44,19 @@ interface ServerStatus {
 
 type ConnectionStatus = 'connecting' | 'online' | 'offline'
 
-interface WServerTabProps {
-  activeTab: string
+interface User {
+  id: string
+  username: string
+  email: string
+  role: string
 }
 
-export default function WServerTab({ activeTab }: WServerTabProps) {
-  const { user } = useAuth()
+interface WServerTabProps {
+  activeTab: string
+  user: User | null
+}
+
+export default function WServerTab({ activeTab, user }: WServerTabProps) {
   const [wservers, setWservers] = useState<WServer[]>([])
   const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({})
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, ConnectionStatus>>({})
@@ -228,9 +235,11 @@ export default function WServerTab({ activeTab }: WServerTabProps) {
 
     ws.onopen = () => {
       // Send authentication message
+      const clientName = user ? `${process.env.NEXT_PUBLIC_PAGENAME || 'MeoPanel'}_${user.username}` : 'unknown'
       const authMessage = {
         uuid: wserver.uuid,
-        token: wserver.token
+        token: wserver.token,
+        clientName
       }
       ws.send(JSON.stringify(authMessage))
 

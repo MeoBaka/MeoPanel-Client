@@ -131,23 +131,23 @@ export default function Dashboard() {
           <div className="tab-content">
             {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
               <div className={activeTab === 'wserver' ? '' : 'hidden'}>
-                <WServerTab activeTab={activeTab} />
+                <WServerTab activeTab={activeTab} user={user} />
               </div>
             )}
             <div className={activeTab === 'pm2' ? '' : 'hidden'}>
-              <PM2Tab activeTab={activeTab} />
+              <PM2Tab activeTab={activeTab} user={user} />
             </div>
             <div className={activeTab === 'instance' ? '' : 'hidden'}>
-              <InstanceTab activeTab={activeTab} />
+              <InstanceTab activeTab={activeTab} user={user} />
             </div>
             {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
               <div className={activeTab === 'usermanager' ? '' : 'hidden'}>
-                <UserManagerTab activeTab={activeTab} />
+                <UserManagerTab activeTab={activeTab} user={user} />
               </div>
             )}
             {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
               <div className={activeTab === 'adminlog' ? '' : 'hidden'}>
-                <AdminLogTab activeTab={activeTab} />
+                <AdminLogTab activeTab={activeTab} user={user} />
               </div>
             )}
           </div>

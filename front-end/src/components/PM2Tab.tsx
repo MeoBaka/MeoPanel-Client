@@ -30,11 +30,19 @@ interface PM2Process {
   }
 }
 
-interface PM2TabProps {
-  activeTab: string
+interface User {
+  id: string
+  username: string
+  email: string
+  role: string
 }
 
-export default function PM2Tab({ activeTab }: PM2TabProps) {
+interface PM2TabProps {
+  activeTab: string
+  user: User | null
+}
+
+export default function PM2Tab({ activeTab, user }: PM2TabProps) {
   const [wservers, setWservers] = useState<WServer[]>([])
   const [pm2Data, setPm2Data] = useState<Record<string, PM2Process[]>>({})
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connecting' | 'online' | 'offline'>>({})
@@ -176,9 +184,11 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
 
     ws.onopen = () => {
       // Send authentication message
+      const clientName = user ? `${process.env.NEXT_PUBLIC_PAGENAME || 'MeoPanel'}_${user.username}` : 'unknown'
       const authMessage = {
         uuid: wserver.uuid,
-        token: wserver.token
+        token: wserver.token,
+        clientName
       }
       ws.send(JSON.stringify(authMessage))
 
