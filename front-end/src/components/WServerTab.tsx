@@ -101,20 +101,14 @@ export default function WServerTab({ activeTab }: WServerTabProps) {
             updateIntervals.current[wserver.id] = setInterval(() => {
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
-              } else {
-                clearInterval(updateIntervals.current[wserver.id])
-                delete updateIntervals.current[wserver.id]
               }
-            }, 10000)
+            }, 1000)
           }
           // Start ping interval if not already running
           if (!pingIntervals.current[wserver.id]) {
             pingIntervals.current[wserver.id] = setInterval(() => {
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send('ping')
-              } else {
-                clearInterval(pingIntervals.current[wserver.id])
-                delete pingIntervals.current[wserver.id]
               }
             }, 30000)
           }
@@ -226,6 +220,13 @@ export default function WServerTab({ activeTab }: WServerTabProps) {
       }
       ws.send(JSON.stringify(authMessage))
 
+      // Send initial status request
+      setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
+        }
+      }, 100) // Small delay to ensure auth is processed
+
       // Intervals are managed by useEffect based on activeTab
     }
 
@@ -275,7 +276,10 @@ export default function WServerTab({ activeTab }: WServerTabProps) {
         ...prev,
         [wserver.id]: 'offline'
       }))
-      // Note: No automatic reconnection - connection stays closed until page refresh or manual reconnect
+      // Automatic reconnection after 5 seconds
+      setTimeout(() => {
+        connectToServer(wserver)
+      }, 5000)
     }
 
     wsRefs.current[wserver.id] = ws

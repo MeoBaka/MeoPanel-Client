@@ -45,10 +45,6 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
   const [notes, setNotes] = useState<Record<string, Record<string, string>>>({})
   const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
-  const [isDragging, setIsDragging] = useState(false)
-  const [hasDragged, setHasDragged] = useState(false)
-  const [dragStart, setDragStart] = useState<{serverId: string, processName: string} | null>(null)
-  const [dragEnd, setDragEnd] = useState<{serverId: string, processName: string} | null>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const logsListenerRef = useRef<((event: MessageEvent) => void) | null>(null)
@@ -95,11 +91,8 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
             updateIntervals.current[wserver.id] = setInterval(() => {
               if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
-              } else {
-                clearInterval(updateIntervals.current[wserver.id])
-                delete updateIntervals.current[wserver.id]
               }
-            }, 1000) // Request pm2-list every 1 second
+            }, 900) // Request pm2-list every 900ms
           }
         } else {
           // Stop intervals when not active
@@ -256,7 +249,10 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
         ...prev,
         [wserver.id]: 'offline'
       }))
-      // Note: No automatic reconnection - connection stays closed until page refresh or manual reconnect
+      // Automatic reconnection after 5 seconds
+      setTimeout(() => {
+        connectToServer(wserver)
+      }, 5000)
     }
 
     wsRefs.current[wserver.id] = ws
@@ -313,52 +309,6 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     return all
   }
 
-  const handleMouseDown = (serverId: string, processName: string) => {
-    setIsDragging(true)
-    setHasDragged(false)
-    setDragStart({ serverId, processName })
-    setDragEnd({ serverId, processName })
-  }
-
-  const handleMouseEnter = (serverId: string, processName: string) => {
-    if (isDragging) {
-      setHasDragged(true)
-      setDragEnd({ serverId, processName })
-    }
-  }
-
-  const handleMouseUp = () => {
-    if (isDragging && dragStart) {
-      if (hasDragged && dragEnd) {
-        // Toggle range
-        const allProcesses = getAllProcessesInOrder()
-        const startProcess = allProcesses.find(p => p.serverId === dragStart.serverId && p.process.name === dragStart.processName)
-        const endProcess = allProcesses.find(p => p.serverId === dragEnd.serverId && p.process.name === dragEnd.processName)
-        if (startProcess && endProcess) {
-          const startIndex = Math.min(startProcess.index, endProcess.index)
-          const endIndex = Math.max(startProcess.index, endProcess.index)
-          const processesToToggle = allProcesses.slice(startIndex, endIndex + 1)
-          const newSelected = { ...selectedProcesses }
-          processesToToggle.forEach(({ serverId, process }) => {
-            if (!newSelected[serverId]) newSelected[serverId] = new Set()
-            if (newSelected[serverId].has(process.name)) {
-              newSelected[serverId].delete(process.name)
-            } else {
-              newSelected[serverId].add(process.name)
-            }
-          })
-          setSelectedProcesses(newSelected)
-        }
-      } else {
-        // Toggle single
-        handleCheckboxChange(dragStart.serverId, dragStart.processName, !selectedProcesses[dragStart.serverId]?.has(dragStart.processName))
-      }
-    }
-    setIsDragging(false)
-    setHasDragged(false)
-    setDragStart(null)
-    setDragEnd(null)
-  }
 
   const handleAction = async (serverId: string, action: string, process: PM2Process) => {
     const ws = wsRefs.current[serverId]
@@ -456,18 +406,6 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     }
   }
 
-  const handleCheckboxChange = (serverId: string, processName: string, checked: boolean) => {
-    setSelectedProcesses(prev => {
-      const current = prev[serverId] || new Set()
-      const newSet = new Set(current)
-      if (checked) {
-        newSet.add(processName)
-      } else {
-        newSet.delete(processName)
-      }
-      return { ...prev, [serverId]: newSet }
-    })
-  }
 
   const handleSelectAll = (serverId: string, checked: boolean) => {
     const processes = pm2Data[serverId] || []
@@ -692,6 +630,8 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                       <select
                         value=""
                         onChange={(e) => handleSelectByStatus(wserver.id, e.target.value)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onMouseUp={(e) => e.stopPropagation()}
                         className="bg-gray-700 text-gray-300 text-xs rounded px-0.5 py-1 w-12"
                       >
                         <option value="">☑</option>
@@ -717,19 +657,28 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                   {processes.map((process) => (
                     <tr
                       key={`${wserver.id}-${process.pm_id}`}
+                      className={selectedProcesses[wserver.id]?.has(process.name) ? 'bg-gray-700' : ''}
                       onContextMenu={(e) => {
                         e.preventDefault()
                         setContextMenu({ x: e.clientX, y: e.clientY, process, serverId: wserver.id })
                       }}
-                      onMouseDown={() => handleMouseDown(wserver.id, process.name)}
-                      onMouseEnter={() => handleMouseEnter(wserver.id, process.name)}
-                      onMouseUp={handleMouseUp}
                     >
                       <td className="px-2 py-2 text-white">
                         <input
                           type="checkbox"
                           checked={selectedProcesses[wserver.id]?.has(process.name) || false}
-                          onChange={(e) => handleCheckboxChange(wserver.id, process.name, e.target.checked)}
+                          onChange={(e) => {
+                            setSelectedProcesses(prev => {
+                              const current = prev[wserver.id] || new Set()
+                              const newSet = new Set(current)
+                              if (e.target.checked) {
+                                newSet.add(process.name)
+                              } else {
+                                newSet.delete(process.name)
+                              }
+                              return { ...prev, [wserver.id]: newSet }
+                            })
+                          }}
                           className="rounded"
                         />
                       </td>
@@ -775,6 +724,8 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                               }));
                             }
                           }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onMouseUp={(e) => e.stopPropagation()}
                           className="bg-gray-700 text-white text-xs rounded px-1 py-1 w-full"
                           placeholder="Add note..."
                         />
