@@ -42,6 +42,9 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
   const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
   const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
+  const [notes, setNotes] = useState<Record<string, Record<string, string>>>({})
+  const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
   const terminalRef = useRef<HTMLDivElement>(null)
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const logsListenerRef = useRef<((event: MessageEvent) => void) | null>(null)
@@ -111,6 +114,13 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     }
   }, [logsModal?.logs, autoScrollEnabled])
 
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [notification])
+
   const fetchWservers = async () => {
     try {
       const token = localStorage.getItem('accessToken')
@@ -162,6 +172,7 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
       setTimeout(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' }))
         }
       }, 100) // Small delay to ensure auth is processed
 
@@ -191,8 +202,26 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
         } else if (parsedMessage.type === 'error') {
           console.error('Server error:', parsedMessage.message);
           alert(`Error: ${parsedMessage.message}`);
+        } else if (parsedMessage.type === 'pm2-notes-get') {
+          setNotes(prev => ({
+            ...prev,
+            [wserver.id]: parsedMessage.data || {}
+          }))
         } else if (parsedMessage.type === 'pm2-send') {
           console.log('Data sent to process successfully');
+          setNotification({ message: 'Data sent to process successfully', type: 'success' })
+        } else if (parsedMessage.type === 'pm2-start' && parsedMessage.status === 'success') {
+          setNotification({ message: 'Process started successfully', type: 'success' })
+        } else if (parsedMessage.type === 'pm2-stop' && parsedMessage.status === 'success') {
+          setNotification({ message: 'Process stopped successfully', type: 'success' })
+        } else if (parsedMessage.type === 'pm2-restart' && parsedMessage.status === 'success') {
+          setNotification({ message: 'Process restarted successfully', type: 'success' })
+        } else if (parsedMessage.type === 'pm2-delete' && parsedMessage.status === 'success') {
+          setNotification({ message: 'Process deleted successfully', type: 'success' })
+        } else if (parsedMessage.type === 'pm2-save' && parsedMessage.status === 'success') {
+          setNotification({ message: 'Processes saved successfully', type: 'success' })
+        } else if (parsedMessage.type === 'pm2-resurrect' && parsedMessage.status === 'success') {
+          setNotification({ message: 'Processes resurrected successfully', type: 'success' })
         } else {
           // Other messages
           setConnectionStatuses(prev => ({
@@ -246,6 +275,14 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     if (hours > 0) return `${hours}h ${minutes % 60}m`
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`
     return `${seconds}s`
+  }
+
+  const getServerStats = (processes: PM2Process[]) => {
+    const total = processes.length
+    const running = processes.filter(p => p.pm2_env.status === 'online').length
+    const stopped = processes.filter(p => p.pm2_env.status === 'stopped').length
+    const error = processes.filter(p => p.pm2_env.status === 'errored').length
+    return { total, running, stopped, error }
   }
 
   const handleAction = async (serverId: string, action: string, process: PM2Process) => {
@@ -351,6 +388,27 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     }))
   }
 
+  const handleSelectByStatus = (serverId: string, status: string) => {
+    const processes = pm2Data[serverId] || []
+    let filtered: PM2Process[] = []
+    if (status === 'all') {
+      filtered = processes
+    } else if (status === 'running') {
+      filtered = processes.filter(p => p.pm2_env.status === 'online')
+    } else if (status === 'stopped') {
+      filtered = processes.filter(p => p.pm2_env.status === 'stopped')
+    } else if (status === 'error') {
+      filtered = processes.filter(p => p.pm2_env.status === 'errored')
+    } else if (status === 'unselect') {
+      setSelectedProcesses(prev => ({ ...prev, [serverId]: new Set() }))
+      return
+    }
+    setSelectedProcesses(prev => ({
+      ...prev,
+      [serverId]: new Set(filtered.map(p => p.name))
+    }))
+  }
+
   const handleScroll = () => {
     if (logsContainerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = logsContainerRef.current
@@ -437,98 +495,80 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     <div>
       <h3 className="text-lg font-medium text-white mb-4">PM2 Management</h3>
 
+      {notification && (
+        <div className={`mb-4 p-3 rounded ${notification.type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white`}>
+          {notification.message}
+        </div>
+      )}
+
       {wservers.map((wserver) => {
         const processes = pm2Data[wserver.id] || []
         const connectionStatus = connectionStatuses[wserver.id] || 'connecting'
+        const stats = getServerStats(processes)
+        const isCollapsed = collapsedServers[wserver.id] || false
 
         return (
-          <div key={wserver.id} className="mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-white font-medium">{wserver.servername}</h4>
-              <span className={`text-sm ${
-                connectionStatus === 'online' ? 'text-green-400' :
-                connectionStatus === 'connecting' ? 'text-yellow-400' :
-                'text-red-400'
-              }`}>
-                {connectionStatus === 'connecting' ? 'Connecting...' :
-                 connectionStatus === 'online' ? 'Online' : 'Offline'}
-              </span>
-            </div>
-
-            <div className="mb-4">
-              <div className="flex gap-2 mb-2">
+          <div key={wserver.id} className="mb-8 bg-gray-800 rounded-lg overflow-hidden">
+            <div className="flex justify-between items-center p-4 bg-gray-700">
+              <div className="flex items-center">
                 <button
-                  onClick={() => handleBulkAction(wserver.id, 'start')}
-                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
-                  disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
+                  onClick={() => setCollapsedServers(prev => ({ ...prev, [wserver.id]: !prev[wserver.id] }))}
+                  className="text-white mr-2"
                 >
-                  Start Selected
+                  {isCollapsed ? '▶' : '▼'}
                 </button>
-                <button
-                  onClick={() => handleBulkAction(wserver.id, 'stop')}
-                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
-                  disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
-                >
-                  Stop Selected
-                </button>
-                <button
-                  onClick={() => handleBulkAction(wserver.id, 'restart')}
-                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
-                  disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
-                >
-                  Restart Selected
-                </button>
-                <button
-                  onClick={() => handleBulkAction(wserver.id, 'delete')}
-                  className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50"
-                  disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
-                >
-                  Delete Selected
-                </button>
+                <h4 className="text-white font-medium">{wserver.servername}</h4>
+                <span className={`ml-2 text-sm ${
+                  connectionStatus === 'online' ? 'text-green-400' :
+                  connectionStatus === 'connecting' ? 'text-yellow-400' :
+                  'text-red-400'
+                }`}>
+                  {connectionStatus === 'connecting' ? 'Connecting...' :
+                   connectionStatus === 'online' ? 'Online' : 'Offline'}
+                </span>
               </div>
-
-              <div className="flex gap-2 mb-2">
-
+              <div className="flex items-center space-x-4 text-sm text-gray-300">
+                <span>Version: 1.0.0</span>
+                <span>Amount: {stats.total}</span>
+                <span>Run: {stats.running}</span>
+                <span>Stop: {stats.stopped}</span>
+                <span>Error: {stats.error}</span>
                 <button
-
                   onClick={() => handleGlobalAction(wserver.id, 'save')}
-
                   className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
-
                 >
-
                   Save
-
                 </button>
-
                 <button
-
                   onClick={() => handleGlobalAction(wserver.id, 'resurrect')}
-
                   className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
-
                 >
-
                   Resurrect
-
                 </button>
-
               </div>
-
             </div>
-            <div className="bg-gray-800 rounded-lg overflow-hidden">
+
+            {!isCollapsed && (
+              <>
+
+            <div className="overflow-hidden">
               <table className="w-full text-sm text-left">
                 <thead className="bg-gray-700">
                   <tr>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">
-                      <input
-                        type="checkbox"
-                        checked={processes.length > 0 && (selectedProcesses[wserver.id]?.size || 0) === processes.length}
-                        onChange={(e) => handleSelectAll(wserver.id, e.target.checked)}
-                        className="rounded"
-                      />
+                    <th className="px-1 py-2 text-xs font-medium text-gray-300 uppercase">
+                      <select
+                        value=""
+                        onChange={(e) => handleSelectByStatus(wserver.id, e.target.value)}
+                        className="bg-gray-700 text-gray-300 text-xs rounded px-0.5 py-1 w-12"
+                      >
+                        <option value="">☑</option>
+                        <option value="all">All</option>
+                        <option value="running">Running</option>
+                        <option value="stopped">Stopped</option>
+                        <option value="error">Error</option>
+                        <option value="unselect">Unselect</option>
+                      </select>
                     </th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Server</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">ID</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Name</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">PID</th>
@@ -537,6 +577,7 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Memory</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Uptime</th>
                     <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">↻</th>
+                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Note</th>
                   </tr>
                 </thead>
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -548,7 +589,7 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                         setContextMenu({ x: e.clientX, y: e.clientY, process, serverId: wserver.id })
                       }}
                     >
-                      <td className="px-4 py-2 text-white">
+                      <td className="px-2 py-2 text-white">
                         <input
                           type="checkbox"
                           checked={selectedProcesses[wserver.id]?.has(process.name) || false}
@@ -556,7 +597,6 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                           className="rounded"
                         />
                       </td>
-                      <td className="px-4 py-2 text-white">{wserver.servername}</td>
                       <td className="px-4 py-2 text-white">{process.pm_id}</td>
                       <td className="px-4 py-2 text-white">{process.name}</td>
                       <td className="px-4 py-2 text-white">{process.pid}</td>
@@ -573,6 +613,36 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                       <td className="px-4 py-2 text-white">{formatBytes(process.monit.memory)}</td>
                       <td className="px-4 py-2 text-white">{process.pm2_env.status === 'online' ? formatUptime(Date.now() - process.pm2_env.pm_uptime) : 'N/A'}</td>
                       <td className="px-4 py-2 text-white">{process.pm2_env.restart_time}</td>
+                      <td className="px-4 py-2 text-white">
+                        <input
+                          type="text"
+                          value={notes[wserver.id]?.[process.name] || ''}
+                          onChange={(e) => {
+                            const newNote = e.target.value;
+                            setNotes(prev => ({
+                              ...prev,
+                              [wserver.id]: {
+                                ...prev[wserver.id],
+                                [process.name]: newNote
+                              }
+                            }));
+                          }}
+                          onBlur={() => {
+                            const ws = wsRefs.current[wserver.id];
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                              ws.send(JSON.stringify({
+                                command: 'pm2-notes-set',
+                                uuid: wserver.uuid,
+                                token: wserver.token,
+                                process_name: process.name,
+                                note: notes[wserver.id]?.[process.name] || ''
+                              }));
+                            }
+                          }}
+                          className="bg-gray-700 text-white text-xs rounded px-1 py-1 w-full"
+                          placeholder="Add note..."
+                        />
+                      </td>
                     </tr>
                   ))}
                   {processes.length === 0 && (
@@ -585,6 +655,41 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                 </tbody>
               </table>
             </div>
+
+           <div className="p-4">
+             <div className="flex gap-2">
+               <button
+                 onClick={() => handleBulkAction(wserver.id, 'start')}
+                 className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
+                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
+               >
+                 Start Selected
+               </button>
+               <button
+                 onClick={() => handleBulkAction(wserver.id, 'stop')}
+                 className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
+                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
+               >
+                 Stop Selected
+               </button>
+               <button
+                 onClick={() => handleBulkAction(wserver.id, 'restart')}
+                 className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
+               >
+                 Restart Selected
+               </button>
+               <button
+                 onClick={() => handleBulkAction(wserver.id, 'delete')}
+                 className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50"
+                 disabled={(selectedProcesses[wserver.id]?.size || 0) === 0}
+               >
+                 Delete Selected
+               </button>
+             </div>
+           </div>
+            </>
+            )}
           </div>
         )
       })}
@@ -653,7 +758,7 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
 
       {logsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-3/4 max-w-4xl max-h-3/4 flex flex-col">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-6xl max-h-3/4 flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-medium text-white">
                 Logs for {logsModal.process.name}
@@ -689,6 +794,65 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                   className="text-gray-400 hover:text-white"
                 >
                   ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-4 bg-gray-700 rounded p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <span className="text-gray-400 text-sm">Status:</span>
+                  <span className={`ml-2 px-2 py-1 rounded text-xs ${
+                    logsModal.process.pm2_env.status === 'online' ? 'bg-green-600 text-white' :
+                    logsModal.process.pm2_env.status === 'stopped' ? 'bg-red-600 text-white' :
+                    'bg-yellow-600 text-white'
+                  }`}>
+                    {logsModal.process.pm2_env.status}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-sm">CPU:</span>
+                  <span className="ml-2 text-white">{logsModal.process.monit.cpu.toFixed(1)}%</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-sm">Memory:</span>
+                  <span className="ml-2 text-white">{formatBytes(logsModal.process.monit.memory)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 text-sm">Uptime:</span>
+                  <span className="ml-2 text-white">{logsModal.process.pm2_env.status === 'online' ? formatUptime(Date.now() - logsModal.process.pm2_env.pm_uptime) : 'N/A'}</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {logsModal.process.pm2_env.status !== 'online' && (
+                  <button
+                    onClick={() => handleAction(logsModal.serverId, 'start', logsModal.process)}
+                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                  >
+                    Start
+                  </button>
+                )}
+                {logsModal.process.pm2_env.status === 'online' && (
+                  <>
+                    <button
+                      onClick={() => handleAction(logsModal.serverId, 'restart', logsModal.process)}
+                      className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                    >
+                      Restart
+                    </button>
+                    <button
+                      onClick={() => handleAction(logsModal.serverId, 'stop', logsModal.process)}
+                      className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                    >
+                      Stop
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => handleAction(logsModal.serverId, 'delete', logsModal.process)}
+                  className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700"
+                >
+                  Delete
                 </button>
               </div>
             </div>
