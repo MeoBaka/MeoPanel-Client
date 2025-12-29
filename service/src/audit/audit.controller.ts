@@ -10,28 +10,33 @@ export class AuditController {
 
   @Get('logs')
   async getAuditLogs(
-    @Query('userId') userId?: string,
+    @Query('username') username?: string,
     @Query('action') action?: AuditAction,
     @Query('resource') resource?: AuditResource,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     const limitNum = limit ? parseInt(limit) : 50;
     const offsetNum = offset ? parseInt(offset) : 0;
 
-    if (userId) {
-      return this.auditService.getUserAuditLogs(userId, limitNum, offsetNum);
-    }
+    const filters = {
+      username,
+      action,
+      resource,
+      startDate: startDate ? new Date(startDate) : undefined,
+      endDate: endDate ? new Date(endDate) : undefined,
+    };
 
-    if (action) {
-      return this.auditService.getAuditLogsByAction(action, limitNum, offsetNum);
-    }
-
-    if (resource) {
-      return this.auditService.getAuditLogsByResource(resource, limitNum, offsetNum);
-    }
-
-    return this.auditService.getRecentAuditLogs(limitNum);
+    const [logs, total] = await this.auditService.getFilteredAuditLogs(filters, limitNum, offsetNum);
+    return {
+      logs,
+      total,
+      page: Math.floor(offsetNum / limitNum) + 1,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    };
   }
 
   @Get('stats')

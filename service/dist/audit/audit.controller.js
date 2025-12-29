@@ -21,19 +21,24 @@ let AuditController = class AuditController {
     constructor(auditService) {
         this.auditService = auditService;
     }
-    async getAuditLogs(userId, action, resource, limit, offset) {
+    async getAuditLogs(username, action, resource, startDate, endDate, limit, offset) {
         const limitNum = limit ? parseInt(limit) : 50;
         const offsetNum = offset ? parseInt(offset) : 0;
-        if (userId) {
-            return this.auditService.getUserAuditLogs(userId, limitNum, offsetNum);
-        }
-        if (action) {
-            return this.auditService.getAuditLogsByAction(action, limitNum, offsetNum);
-        }
-        if (resource) {
-            return this.auditService.getAuditLogsByResource(resource, limitNum, offsetNum);
-        }
-        return this.auditService.getRecentAuditLogs(limitNum);
+        const filters = {
+            username,
+            action,
+            resource,
+            startDate: startDate ? new Date(startDate) : undefined,
+            endDate: endDate ? new Date(endDate) : undefined,
+        };
+        const [logs, total] = await this.auditService.getFilteredAuditLogs(filters, limitNum, offsetNum);
+        return {
+            logs,
+            total,
+            page: Math.floor(offsetNum / limitNum) + 1,
+            limit: limitNum,
+            totalPages: Math.ceil(total / limitNum),
+        };
     }
     async getAuditStats() {
         const recentLogs = await this.auditService.getRecentAuditLogs(1000);
@@ -55,13 +60,15 @@ let AuditController = class AuditController {
 exports.AuditController = AuditController;
 __decorate([
     (0, common_1.Get)('logs'),
-    __param(0, (0, common_1.Query)('userId')),
+    __param(0, (0, common_1.Query)('username')),
     __param(1, (0, common_1.Query)('action')),
     __param(2, (0, common_1.Query)('resource')),
-    __param(3, (0, common_1.Query)('limit')),
-    __param(4, (0, common_1.Query)('offset')),
+    __param(3, (0, common_1.Query)('startDate')),
+    __param(4, (0, common_1.Query)('endDate')),
+    __param(5, (0, common_1.Query)('limit')),
+    __param(6, (0, common_1.Query)('offset')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], AuditController.prototype, "getAuditLogs", null);
 __decorate([

@@ -7,6 +7,7 @@ import WServerTab from '@/components/WServerTab'
 import PM2Tab from '@/components/PM2Tab'
 import InstanceTab from '@/components/InstanceTab'
 import UserManagerTab from '@/components/UserManagerTab'
+import AdminLogTab from '@/components/AdminLogTab'
 import Header from '@/components/Header'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +31,7 @@ export default function Dashboard() {
    useEffect(() => {
      if (user) {
        const hasWServerAccess = user.role === 'ADMIN' || user.role === 'OWNER'
-       if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager')) {
+       if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager' || activeTab === 'adminlog')) {
          setActiveTab('pm2')
        }
      }
@@ -110,6 +111,18 @@ export default function Dashboard() {
                     User Manager
                   </button>
                 )}
+                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                  <button
+                    onClick={() => handleTabChange('adminlog')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'adminlog'
+                        ? 'border-blue-500 text-blue-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Admin Log
+                  </button>
+                )}
               </nav>
             </div>
           </div>
@@ -130,6 +143,11 @@ export default function Dashboard() {
             {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
               <div className={activeTab === 'usermanager' ? '' : 'hidden'}>
                 <UserManagerTab activeTab={activeTab} />
+              </div>
+            )}
+            {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+              <div className={activeTab === 'adminlog' ? '' : 'hidden'}>
+                <AdminLogTab activeTab={activeTab} />
               </div>
             )}
           </div>
