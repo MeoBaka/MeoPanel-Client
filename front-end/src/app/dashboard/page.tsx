@@ -1,6 +1,7 @@
 'use client'
 
 import { useAuth } from '@/contexts/AuthContext'
+import { WebSocketProvider } from '@/contexts/WebSocketContext'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import WServerTab from '@/components/WServerTab'
@@ -14,28 +15,30 @@ export const dynamic = 'force-dynamic'
 
 export default function Dashboard() {
    const { user, logout, isLoading } = useAuth()
-   const [activeTab, setActiveTab] = useState(() => {
-     if (typeof window !== 'undefined') {
-       return localStorage.getItem('activeTab') || 'pm2'
-     }
-     return 'pm2'
-   })
-   const router = useRouter()
+    const [activeTab, setActiveTab] = useState('pm2')
+    const router = useRouter()
 
-   useEffect(() => {
-     if (typeof window !== 'undefined' && !isLoading && !user) {
-       router.push('/')
-     }
-   }, [user, isLoading, router])
+    useEffect(() => {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('activeTab')
+        if (saved) setActiveTab(saved)
+      }
+    }, [])
 
-   useEffect(() => {
-     if (user) {
-       const hasWServerAccess = user.role === 'ADMIN' || user.role === 'OWNER'
-       if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager' || activeTab === 'adminlog')) {
-         setActiveTab('pm2')
-       }
-     }
-   }, [user, activeTab])
+    useEffect(() => {
+      if (typeof window !== 'undefined' && !isLoading && !user) {
+        router.push('/')
+      }
+    }, [user, isLoading, router])
+
+    useEffect(() => {
+      if (user) {
+        const hasWServerAccess = user.role === 'ADMIN' || user.role === 'OWNER'
+        if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager' || activeTab === 'adminlog')) {
+          setActiveTab('pm2')
+        }
+      }
+    }, [user, activeTab])
 
    const handleTabChange = (tab: string) => {
      setActiveTab(tab)
@@ -128,29 +131,31 @@ export default function Dashboard() {
           </div>
 
           {/* Tab Content */}
-          <div className="tab-content">
-            {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
-              <div className={activeTab === 'wserver' ? '' : 'hidden'}>
-                <WServerTab activeTab={activeTab} user={user} />
+          <WebSocketProvider user={user}>
+            <div className="tab-content">
+              {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                <div className={activeTab === 'wserver' ? '' : 'hidden'}>
+                  <WServerTab activeTab={activeTab} user={user} />
+                </div>
+              )}
+              <div className={activeTab === 'pm2' ? '' : 'hidden'}>
+                <PM2Tab activeTab={activeTab} user={user} />
               </div>
-            )}
-            <div className={activeTab === 'pm2' ? '' : 'hidden'}>
-              <PM2Tab activeTab={activeTab} user={user} />
+              <div className={activeTab === 'instance' ? '' : 'hidden'}>
+                 <InstanceTab activeTab={activeTab} />
+               </div>
+               {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                 <div className={activeTab === 'usermanager' ? '' : 'hidden'}>
+                   <UserManagerTab activeTab={activeTab} />
+                 </div>
+               )}
+               {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                 <div className={activeTab === 'adminlog' ? '' : 'hidden'}>
+                   <AdminLogTab activeTab={activeTab} />
+                 </div>
+               )}
             </div>
-            <div className={activeTab === 'instance' ? '' : 'hidden'}>
-              <InstanceTab activeTab={activeTab} user={user} />
-            </div>
-            {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
-              <div className={activeTab === 'usermanager' ? '' : 'hidden'}>
-                <UserManagerTab activeTab={activeTab} user={user} />
-              </div>
-            )}
-            {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
-              <div className={activeTab === 'adminlog' ? '' : 'hidden'}>
-                <AdminLogTab activeTab={activeTab} user={user} />
-              </div>
-            )}
-          </div>
+          </WebSocketProvider>
         </div>
       </main>
 

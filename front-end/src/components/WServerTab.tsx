@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useWebSocket } from '@/contexts/WebSocketContext'
 
 interface WServer {
   id: string // This is the server_uuid for display
@@ -57,23 +58,59 @@ interface WServerTabProps {
 }
 
 export default function WServerTab({ activeTab, user }: WServerTabProps) {
-  const [wservers, setWservers] = useState<WServer[]>([])
-  const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({})
-  const [connectionStatuses, setConnectionStatuses] = useState<Record<string, ConnectionStatus>>({})
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [formData, setFormData] = useState({
-    servername: '',
-    url: '',
-    uuid: '',
-    token: ''
-  })
-  const [loading, setLoading] = useState(false)
-  const wsRefs = useRef<Record<string, WebSocket>>({})
-  const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
-  const pingIntervals = useRef<Record<string, NodeJS.Timeout>>({})
+   const { connectToServer, sendToServer, isConnected } = useWebSocket()
+   const [wservers, setWservers] = useState<WServer[]>([])
+   const [serverStatuses, setServerStatuses] = useState<Record<string, ServerStatus>>({})
+   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, ConnectionStatus>>({})
+   const [showAddModal, setShowAddModal] = useState(false)
+   const [formData, setFormData] = useState({
+     servername: '',
+     url: '',
+     uuid: '',
+     token: ''
+   })
+   const [loading, setLoading] = useState(false)
+   const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
+   const pingIntervals = useRef<Record<string, NodeJS.Timeout>>({})
 
   useEffect(() => {
     fetchWservers()
+  }, [])
+
+  const handleMessage = useCallback((event: MessageEvent, serverId: string) => {
+    try {
+      const message = event.data
+
+      // Try to parse as JSON first
+      const parsedMessage = JSON.parse(message)
+
+      // Check if it's a ping response
+      if (parsedMessage.pong && parsedMessage.status === 'ok') {
+        // Handle ping response - connection is healthy
+        setConnectionStatuses(prev => ({
+          ...prev,
+          [serverId]: 'online'
+        }))
+        return
+      }
+
+      // Otherwise, treat as server status data
+      const data: ServerStatus = parsedMessage
+      setServerStatuses(prev => ({
+        ...prev,
+        [serverId]: data
+      }))
+      setConnectionStatuses(prev => ({
+        ...prev,
+        [serverId]: 'online'
+      }))
+    } catch (error) {
+      console.error('Failed to parse server message:', error)
+      setConnectionStatuses(prev => ({
+        ...prev,
+        [serverId]: 'offline'
+      }))
+    }
   }, [])
 
   useEffect(() => {
@@ -81,43 +118,36 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
 
     // Connect to WebSocket for each wserver
     wservers.forEach(wserver => {
-      connectToServer(wserver)
+      connectToServer(wserver, handleMessage)
     })
 
     return () => {
-      // Cleanup WebSocket connections and intervals
-      Object.values(wsRefs.current).forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close()
-        }
-      })
+      // Cleanup intervals
       Object.values(updateIntervals.current).forEach(clearInterval)
       Object.values(pingIntervals.current).forEach(clearInterval)
-      wsRefs.current = {}
       updateIntervals.current = {}
       pingIntervals.current = {}
     }
-  }, [wservers, activeTab])
+  }, [wservers, activeTab, connectToServer, handleMessage])
 
   useEffect(() => {
     // Start or stop update intervals based on activeTab
     wservers.forEach(wserver => {
-      const ws = wsRefs.current[wserver.id]
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (isConnected(wserver.id)) {
         if (activeTab === 'wserver') {
           // Start update interval if not already running
           if (!updateIntervals.current[wserver.id]) {
             updateIntervals.current[wserver.id] = setInterval(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
+              if (isConnected(wserver.id)) {
+                sendToServer(wserver.id, { command: 'status', uuid: wserver.uuid, token: wserver.token })
               }
             }, 1000)
           }
           // Start ping interval if not already running
           if (!pingIntervals.current[wserver.id]) {
             pingIntervals.current[wserver.id] = setInterval(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send('ping')
+              if (isConnected(wserver.id)) {
+                sendToServer(wserver.id, 'ping')
               }
             }, 30000)
           }
@@ -134,19 +164,18 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
         }
       }
     })
-  }, [activeTab, wservers])
+  }, [activeTab, wservers, isConnected, sendToServer])
 
   useEffect(() => {
     // Force immediate update when activeTab becomes 'wserver'
     if (activeTab === 'wserver') {
       wservers.forEach(wserver => {
-        const ws = wsRefs.current[wserver.id]
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
+        if (isConnected(wserver.id)) {
+          sendToServer(wserver.id, { command: 'status', uuid: wserver.uuid, token: wserver.token })
         }
       })
     }
-  }, [activeTab, wservers])
+  }, [activeTab, wservers, isConnected, sendToServer])
 
   const fetchWservers = async () => {
     try {
@@ -211,118 +240,6 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
     }
   }
 
-  const connectToServer = (wserver: WServer) => {
-    // Don't create a new connection if one is already active
-    if (wsRefs.current[wserver.id] && wsRefs.current[wserver.id].readyState === WebSocket.OPEN) {
-      return
-    }
-
-    // Close existing connection if it's in a bad state
-    if (wsRefs.current[wserver.id] && wsRefs.current[wserver.id].readyState !== WebSocket.CLOSED) {
-      wsRefs.current[wserver.id].close()
-    }
-
-    // Set connecting status
-    setConnectionStatuses(prev => ({
-      ...prev,
-      [wserver.id]: 'connecting'
-    }))
-
-    // Convert HTTP URL to WebSocket URL
-    const wsUrl = wserver.url.replace(/^http/, 'ws')
-
-    const ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      // Send authentication message
-      const clientName = user ? `${process.env.NEXT_PUBLIC_PAGENAME || 'MeoPanel'}_${user.username}` : 'unknown'
-      const authMessage = {
-        uuid: wserver.uuid,
-        token: wserver.token,
-        clientName
-      }
-      ws.send(JSON.stringify(authMessage))
-
-      // Send initial status request
-      setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
-        }
-      }, 100) // Small delay to ensure auth is processed
-
-      // Start update intervals if activeTab is wserver
-      if (activeTab === 'wserver') {
-        if (!updateIntervals.current[wserver.id]) {
-          updateIntervals.current[wserver.id] = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
-            }
-          }, 1000)
-        }
-        if (!pingIntervals.current[wserver.id]) {
-          pingIntervals.current[wserver.id] = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send('ping')
-            }
-          }, 30000)
-        }
-      }
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const message = event.data
-
-        // Try to parse as JSON first
-        const parsedMessage = JSON.parse(message)
-
-        // Check if it's a ping response
-        if (parsedMessage.pong && parsedMessage.status === 'ok') {
-          // Handle ping response - connection is healthy
-          return
-        }
-
-        // Otherwise, treat as server status data
-        const data: ServerStatus = parsedMessage
-        setServerStatuses(prev => ({
-          ...prev,
-          [wserver.id]: data
-        }))
-        setConnectionStatuses(prev => ({
-          ...prev,
-          [wserver.id]: 'online'
-        }))
-      } catch (error) {
-        console.error('Failed to parse server message:', error)
-        setConnectionStatuses(prev => ({
-          ...prev,
-          [wserver.id]: 'offline'
-        }))
-      }
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error for server', wserver.servername, error)
-      setConnectionStatuses(prev => ({
-        ...prev,
-        [wserver.id]: 'offline'
-      }))
-    }
-
-    ws.onclose = (event) => {
-      console.log('WebSocket closed for server', wserver.servername, 'code:', event.code)
-      setConnectionStatuses(prev => ({
-        ...prev,
-        [wserver.id]: 'offline'
-      }))
-      // Automatic reconnection after 5 seconds
-      setTimeout(() => {
-        connectToServer(wserver)
-      }, 5000)
-    }
-
-    wsRefs.current[wserver.id] = ws
-  }
 
   const formatBytes = (bytes: number) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']

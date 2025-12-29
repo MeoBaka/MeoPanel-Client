@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useWebSocket } from '@/contexts/WebSocketContext'
 // import { Terminal } from 'xterm'
 // import { FitAddon } from 'xterm-addon-fit'
 // import 'xterm/css/xterm.css'
@@ -43,27 +44,96 @@ interface PM2TabProps {
 }
 
 export default function PM2Tab({ activeTab, user }: PM2TabProps) {
-  const [wservers, setWservers] = useState<WServer[]>([])
-  const [pm2Data, setPm2Data] = useState<Record<string, PM2Process[]>>({})
-  const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connecting' | 'online' | 'offline'>>({})
-  const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
-  const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
-  const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
-  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
-  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-  const [notes, setNotes] = useState<Record<string, Record<string, string>>>({})
-  const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
-  const terminalRef = useRef<HTMLDivElement>(null)
-  const logsContainerRef = useRef<HTMLDivElement>(null)
-  const logsListenerRef = useRef<((event: MessageEvent) => void) | null>(null)
+   const { connectToServer, sendToServer, isConnected } = useWebSocket()
+   const [wservers, setWservers] = useState<WServer[]>([])
+   const [pm2Data, setPm2Data] = useState<Record<string, PM2Process[]>>({})
+   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connecting' | 'online' | 'offline'>>({})
+   const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
+   const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
+   const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
+   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
+   const [notes, setNotes] = useState<Record<string, Record<string, string>>>({})
+   const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
+   const terminalRef = useRef<HTMLDivElement>(null)
+   const logsContainerRef = useRef<HTMLDivElement>(null)
+   const logsListenerRef = useRef<((event: MessageEvent, serverId: string) => void) | null>(null)
 
-  useEffect(() => {
-    const handleClickOutside = () => setContextMenu(null)
-    document.addEventListener('click', handleClickOutside)
-    return () => document.removeEventListener('click', handleClickOutside)
+   useEffect(() => {
+     const handleClickOutside = () => setContextMenu(null)
+     document.addEventListener('click', handleClickOutside)
+     return () => document.removeEventListener('click', handleClickOutside)
+   }, [])
+   const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
+
+  const handleMessage = useCallback((event: MessageEvent, serverId: string) => {
+    try {
+      const message = event.data
+
+      // Try to parse as JSON first
+      const parsedMessage = JSON.parse(message)
+
+      // Check if it's pm2-list response
+      if (parsedMessage.type === 'pm2-list') {
+        setPm2Data(prev => ({
+          ...prev,
+          [serverId]: parsedMessage.data || []
+        }))
+        setConnectionStatuses(prev => ({
+          ...prev,
+          [serverId]: 'online'
+        }))
+      } else if (parsedMessage.pong && parsedMessage.status === 'ok') {
+        // Handle ping response - connection is healthy
+        setConnectionStatuses(prev => ({
+          ...prev,
+          [serverId]: 'online'
+        }))
+        return
+      } else if (parsedMessage.type === 'error') {
+        console.error('Server error:', parsedMessage.message);
+        alert(`Error: ${parsedMessage.message}`);
+      } else if (parsedMessage.type === 'pm2-notes-get') {
+        setNotes(prev => ({
+          ...prev,
+          [serverId]: parsedMessage.data || {}
+        }))
+      } else if (parsedMessage.type === 'pm2-send') {
+        console.log('Data sent to process successfully');
+        setNotification({ message: 'Data sent to process successfully', type: 'success' })
+      } else if (parsedMessage.type === 'pm2-start' && parsedMessage.status === 'success') {
+        setNotification({ message: 'Process started successfully', type: 'success' })
+      } else if (parsedMessage.type === 'pm2-stop' && parsedMessage.status === 'success') {
+        setNotification({ message: 'Process stopped successfully', type: 'success' })
+      } else if (parsedMessage.type === 'pm2-restart' && parsedMessage.status === 'success') {
+        setNotification({ message: 'Process restarted successfully', type: 'success' })
+      } else if (parsedMessage.type === 'pm2-delete' && parsedMessage.status === 'success') {
+        setNotification({ message: 'Process deleted successfully', type: 'success' })
+      } else if (parsedMessage.type === 'pm2-save' && parsedMessage.status === 'success') {
+        setNotification({ message: 'Processes saved successfully', type: 'success' })
+      } else if (parsedMessage.type === 'pm2-resurrect' && parsedMessage.status === 'success') {
+        setNotification({ message: 'Processes resurrected successfully', type: 'success' })
+      } else if (parsedMessage.type === 'pm2-logs') {
+        // Handle logs response
+        setLogsModal(prev => {
+          if (!prev) return null;
+          return { ...prev, logs: parsedMessage.data }
+        })
+      } else {
+        // Other messages
+        setConnectionStatuses(prev => ({
+          ...prev,
+          [serverId]: 'online'
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to parse server message:', error)
+      setConnectionStatuses(prev => ({
+        ...prev,
+        [serverId]: 'offline'
+      }))
+    }
   }, [])
-  const wsRefs = useRef<Record<string, WebSocket>>({})
-  const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
 
   useEffect(() => {
     fetchWservers()
@@ -74,35 +144,28 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
     // Connect to WebSocket for each wserver
     wservers.forEach(wserver => {
-      connectToServer(wserver)
+      connectToServer(wserver, handleMessage)
     })
 
     return () => {
-      // Cleanup WebSocket connections and intervals
-      Object.values(wsRefs.current).forEach(ws => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.close()
-        }
-      })
+      // Cleanup intervals
       Object.values(updateIntervals.current).forEach(clearInterval)
-      wsRefs.current = {}
       updateIntervals.current = {}
     }
-  }, [wservers, activeTab])
+  }, [wservers, activeTab, connectToServer, handleMessage])
 
   useEffect(() => {
     // Start or stop update intervals based on activeTab
     wservers.forEach(wserver => {
-      const ws = wsRefs.current[wserver.id]
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      if (isConnected(wserver.id)) {
         if (activeTab === 'pm2') {
           // Start update interval if not already running
           if (!updateIntervals.current[wserver.id]) {
             // Send immediately on start
-            ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+            sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' })
             updateIntervals.current[wserver.id] = setInterval(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+              if (isConnected(wserver.id)) {
+                sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' })
               }
             }, 900) // Request pm2-list every 900ms
           }
@@ -115,20 +178,19 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         }
       }
     })
-  }, [activeTab, wservers])
+  }, [activeTab, wservers, isConnected, sendToServer])
 
   useEffect(() => {
     // Force immediate update when activeTab becomes 'pm2'
     if (activeTab === 'pm2') {
       wservers.forEach(wserver => {
-        const ws = wsRefs.current[wserver.id]
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
-          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' }))
+        if (isConnected(wserver.id)) {
+          sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' })
+          sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' })
         }
       })
     }
-  }, [activeTab, wservers])
+  }, [activeTab, wservers, isConnected, sendToServer])
 
   useEffect(() => {
     if (autoScrollEnabled && logsContainerRef.current && logsModal) {
@@ -160,137 +222,6 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     }
   }
 
-  const connectToServer = (wserver: WServer) => {
-    // Don't create a new connection if one is already active
-    if (wsRefs.current[wserver.id] && wsRefs.current[wserver.id].readyState === WebSocket.OPEN) {
-      return
-    }
-
-    // Close existing connection if it's in a bad state
-    if (wsRefs.current[wserver.id] && wsRefs.current[wserver.id].readyState !== WebSocket.CLOSED) {
-      wsRefs.current[wserver.id].close()
-    }
-
-    // Set connecting status
-    setConnectionStatuses(prev => ({
-      ...prev,
-      [wserver.id]: 'connecting'
-    }))
-
-    // Convert HTTP URL to WebSocket URL
-    const wsUrl = wserver.url.replace(/^http/, 'ws')
-
-    const ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      // Send authentication message
-      const clientName = user ? `${process.env.NEXT_PUBLIC_PAGENAME || 'MeoPanel'}_${user.username}` : 'unknown'
-      const authMessage = {
-        uuid: wserver.uuid,
-        token: wserver.token,
-        clientName
-      }
-      ws.send(JSON.stringify(authMessage))
-
-      // Send initial pm2-list request
-      setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
-          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' }))
-        }
-      }, 100) // Small delay to ensure auth is processed
-
-      // Start update interval if activeTab is pm2
-      if (activeTab === 'pm2' && !updateIntervals.current[wserver.id]) {
-        updateIntervals.current[wserver.id] = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
-          }
-        }, 900)
-      }
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const message = event.data
-
-        // Try to parse as JSON first
-        const parsedMessage = JSON.parse(message)
-
-        // Check if it's pm2-list response
-        if (parsedMessage.type === 'pm2-list') {
-          setPm2Data(prev => ({
-            ...prev,
-            [wserver.id]: parsedMessage.data || []
-          }))
-          setConnectionStatuses(prev => ({
-            ...prev,
-            [wserver.id]: 'online'
-          }))
-        } else if (parsedMessage.pong && parsedMessage.status === 'ok') {
-          // Handle ping response - connection is healthy
-          return
-        } else if (parsedMessage.type === 'error') {
-          console.error('Server error:', parsedMessage.message);
-          alert(`Error: ${parsedMessage.message}`);
-        } else if (parsedMessage.type === 'pm2-notes-get') {
-          setNotes(prev => ({
-            ...prev,
-            [wserver.id]: parsedMessage.data || {}
-          }))
-        } else if (parsedMessage.type === 'pm2-send') {
-          console.log('Data sent to process successfully');
-          setNotification({ message: 'Data sent to process successfully', type: 'success' })
-        } else if (parsedMessage.type === 'pm2-start' && parsedMessage.status === 'success') {
-          setNotification({ message: 'Process started successfully', type: 'success' })
-        } else if (parsedMessage.type === 'pm2-stop' && parsedMessage.status === 'success') {
-          setNotification({ message: 'Process stopped successfully', type: 'success' })
-        } else if (parsedMessage.type === 'pm2-restart' && parsedMessage.status === 'success') {
-          setNotification({ message: 'Process restarted successfully', type: 'success' })
-        } else if (parsedMessage.type === 'pm2-delete' && parsedMessage.status === 'success') {
-          setNotification({ message: 'Process deleted successfully', type: 'success' })
-        } else if (parsedMessage.type === 'pm2-save' && parsedMessage.status === 'success') {
-          setNotification({ message: 'Processes saved successfully', type: 'success' })
-        } else if (parsedMessage.type === 'pm2-resurrect' && parsedMessage.status === 'success') {
-          setNotification({ message: 'Processes resurrected successfully', type: 'success' })
-        } else {
-          // Other messages
-          setConnectionStatuses(prev => ({
-            ...prev,
-            [wserver.id]: 'online'
-          }))
-        }
-      } catch (error) {
-        console.error('Failed to parse server message:', error)
-        setConnectionStatuses(prev => ({
-          ...prev,
-          [wserver.id]: 'offline'
-        }))
-      }
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error for server', wserver.servername, error)
-      setConnectionStatuses(prev => ({
-        ...prev,
-        [wserver.id]: 'offline'
-      }))
-    }
-
-    ws.onclose = (event) => {
-      console.log('WebSocket closed for server', wserver.servername, 'code:', event.code)
-      setConnectionStatuses(prev => ({
-        ...prev,
-        [wserver.id]: 'offline'
-      }))
-      // Automatic reconnection after 5 seconds
-      setTimeout(() => {
-        connectToServer(wserver)
-      }, 5000)
-    }
-
-    wsRefs.current[wserver.id] = ws
-  }
 
   const formatBytes = (bytes: number) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
@@ -345,9 +276,8 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
 
   const handleAction = async (serverId: string, action: string, process: PM2Process) => {
-    const ws = wsRefs.current[serverId]
     const wserver = wservers.find(s => s.id === serverId)
-    if (ws && ws.readyState === WebSocket.OPEN && wserver) {
+    if (isConnected(serverId) && wserver) {
       const command = `pm2-${action}`
       const message: any = {
         command,
@@ -360,11 +290,11 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       } else {
         message.id = process.pm_id
       }
-      ws.send(JSON.stringify(message))
+      sendToServer(serverId, message)
       // After action, refresh the list
       setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ command: 'pm2-list', uuid: wserver.uuid, token: wserver.token }))
+        if (isConnected(serverId)) {
+          sendToServer(serverId, { command: 'pm2-list', uuid: wserver.uuid, token: wserver.token })
         }
       }, 1000)
     }
@@ -385,9 +315,8 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
     // Send commands to each server
     Object.entries(serverGroups).forEach(([serverId, processNames]) => {
-      const ws = wsRefs.current[serverId]
       const wserver = wservers.find(s => s.id === serverId)
-      if (ws && ws.readyState === WebSocket.OPEN && wserver) {
+      if (isConnected(serverId) && wserver) {
         const command = `pm2-multi-${action}`
         const message: any = {
           command,
@@ -407,11 +336,11 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           }).filter(Boolean) as number[]
           message.ids = ids
         }
-        ws.send(JSON.stringify(message))
+        sendToServer(serverId, message)
         // Refresh the list for this server
         setTimeout(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ command: 'pm2-list', uuid: wserver.uuid, token: wserver.token }))
+          if (isConnected(serverId)) {
+            sendToServer(serverId, { command: 'pm2-list', uuid: wserver.uuid, token: wserver.token })
           }
         }, 1000)
       }
@@ -422,19 +351,18 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
   }
 
   const handleGlobalAction = async (serverId: string, action: string) => {
-    const ws = wsRefs.current[serverId]
     const wserver = wservers.find(s => s.id === serverId)
-    if (ws && ws.readyState === WebSocket.OPEN && wserver) {
+    if (isConnected(serverId) && wserver) {
       const command = `pm2-${action}`
-      ws.send(JSON.stringify({
+      sendToServer(serverId, {
         command,
         uuid: wserver.uuid,
         token: wserver.token
-      }))
+      })
       // Refresh the list
       setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ command: 'pm2-list', uuid: wserver.uuid, token: wserver.token }))
+        if (isConnected(serverId)) {
+          sendToServer(serverId, { command: 'pm2-list', uuid: wserver.uuid, token: wserver.token })
         }
       }, 1000)
     }
@@ -479,9 +407,8 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
   }
 
   const openLogsModal = async (serverId: string, process: PM2Process) => {
-    const ws = wsRefs.current[serverId]
     const wserver = wservers.find(s => s.id === serverId)
-    if (ws && ws.readyState === WebSocket.OPEN && wserver) {
+    if (isConnected(serverId) && wserver) {
       setLogsModal({
         serverId,
         process,
@@ -489,17 +416,17 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         command: ''
       })
       // Request logs
-      ws.send(JSON.stringify({
+      sendToServer(serverId, {
         command: 'pm2-logs',
         id: process.pm_id,
         uuid: wserver.uuid,
         token: wserver.token
-      }))
+      })
 
       // Set up message handler for logs response
       let isInitial = true;
       let received = false;
-      const handleLogsResponse = (event: MessageEvent) => {
+      const handleLogsResponse = (event: MessageEvent, serverId: string) => {
         try {
           const message = JSON.parse(event.data)
           if (message.type === 'pm2-logs') {
@@ -520,7 +447,8 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       }
 
       logsListenerRef.current = handleLogsResponse;
-      ws.addEventListener('message', handleLogsResponse)
+      // Note: Since we're using shared context, we can't add event listeners directly.
+      // The logs will be handled by the main message handler.
 
       // Fallback timeout
       setTimeout(() => {
@@ -537,16 +465,15 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
   }
 
   const sendCommand = (serverId: string, process: PM2Process, command: string) => {
-    const ws = wsRefs.current[serverId]
     const wserver = wservers.find(s => s.id === serverId)
-    if (ws && ws.readyState === WebSocket.OPEN && wserver && command.trim()) {
-      ws.send(JSON.stringify({
+    if (isConnected(serverId) && wserver && command.trim()) {
+      sendToServer(serverId, {
         command: 'pm2-send',
         id: process.pm_id,
         data: command,
         uuid: wserver.uuid,
         token: wserver.token
-      }))
+      })
       // Clear command
       setLogsModal(prev => prev ? { ...prev, command: '' } : null)
     }
@@ -748,15 +675,14 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                             }));
                           }}
                           onBlur={() => {
-                            const ws = wsRefs.current[wserver.id];
-                            if (ws && ws.readyState === WebSocket.OPEN) {
-                              ws.send(JSON.stringify({
+                            if (isConnected(wserver.id)) {
+                              sendToServer(wserver.id, {
                                 command: 'pm2-notes-set',
                                 uuid: wserver.uuid,
                                 token: wserver.token,
                                 process_name: process.name,
                                 note: notes[wserver.id]?.[process.name] || ''
-                              }));
+                              });
                             }
                           }}
                           onMouseDown={(e) => e.stopPropagation()}
@@ -908,19 +834,15 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                 <button
                   onClick={() => {
                     if (logsModal) {
-                      const ws = wsRefs.current[logsModal.serverId];
                       const wserver = wservers.find(s => s.id === logsModal.serverId)
-                      if (wserver && ws?.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({
+                      if (wserver && isConnected(logsModal.serverId)) {
+                        sendToServer(logsModal.serverId, {
                           command: 'pm2-stop-logs',
                           id: logsModal.process.pm_id,
                           uuid: wserver.uuid,
                           token: wserver.token
-                        }));
-                        if (logsListenerRef.current) {
-                          ws.removeEventListener('message', logsListenerRef.current);
-                          logsListenerRef.current = null;
-                        }
+                        });
+                        logsListenerRef.current = null;
                       }
                     }
                     setLogsModal(null);
