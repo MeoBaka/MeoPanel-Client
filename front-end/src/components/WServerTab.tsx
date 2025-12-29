@@ -70,6 +70,8 @@ export default function WServerTab({ activeTab }: WServerTabProps) {
   }, [])
 
   useEffect(() => {
+    if (activeTab !== 'wserver') return;
+
     // Connect to WebSocket for each wserver
     wservers.forEach(wserver => {
       connectToServer(wserver)
@@ -88,32 +90,44 @@ export default function WServerTab({ activeTab }: WServerTabProps) {
       updateIntervals.current = {}
       pingIntervals.current = {}
     }
-  }, [wservers])
+  }, [wservers, activeTab])
 
   useEffect(() => {
-    // Start update intervals when WebSocket is connected (assuming WServerTab is active when rendered)
+    // Start or stop update intervals based on activeTab
     wservers.forEach(wserver => {
       const ws = wsRefs.current[wserver.id]
       if (ws && ws.readyState === WebSocket.OPEN) {
-        // Start update interval if not already running
-        if (!updateIntervals.current[wserver.id]) {
-          updateIntervals.current[wserver.id] = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
-            }
-          }, 1000)
-        }
-        // Start ping interval if not already running
-        if (!pingIntervals.current[wserver.id]) {
-          pingIntervals.current[wserver.id] = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send('ping')
-            }
-          }, 30000)
+        if (activeTab === 'wserver') {
+          // Start update interval if not already running
+          if (!updateIntervals.current[wserver.id]) {
+            updateIntervals.current[wserver.id] = setInterval(() => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
+              }
+            }, 1000)
+          }
+          // Start ping interval if not already running
+          if (!pingIntervals.current[wserver.id]) {
+            pingIntervals.current[wserver.id] = setInterval(() => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send('ping')
+              }
+            }, 30000)
+          }
+        } else {
+          // Stop intervals when not active
+          if (updateIntervals.current[wserver.id]) {
+            clearInterval(updateIntervals.current[wserver.id])
+            delete updateIntervals.current[wserver.id]
+          }
+          if (pingIntervals.current[wserver.id]) {
+            clearInterval(pingIntervals.current[wserver.id])
+            delete pingIntervals.current[wserver.id]
+          }
         }
       }
     })
-  }, [wservers])
+  }, [activeTab, wservers])
 
   useEffect(() => {
     // Force immediate update when activeTab becomes 'wserver'
@@ -227,21 +241,22 @@ export default function WServerTab({ activeTab }: WServerTabProps) {
         }
       }, 100) // Small delay to ensure auth is processed
 
-      // Start update interval if not already running
-      if (!updateIntervals.current[wserver.id]) {
-        updateIntervals.current[wserver.id] = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
-          }
-        }, 1000)
-      }
-      // Start ping interval if not already running
-      if (!pingIntervals.current[wserver.id]) {
-        pingIntervals.current[wserver.id] = setInterval(() => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send('ping')
-          }
-        }, 30000)
+      // Start update intervals if activeTab is wserver
+      if (activeTab === 'wserver') {
+        if (!updateIntervals.current[wserver.id]) {
+          updateIntervals.current[wserver.id] = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ command: 'status', uuid: wserver.uuid, token: wserver.token }))
+            }
+          }, 1000)
+        }
+        if (!pingIntervals.current[wserver.id]) {
+          pingIntervals.current[wserver.id] = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send('ping')
+            }
+          }, 30000)
+        }
       }
     }
 

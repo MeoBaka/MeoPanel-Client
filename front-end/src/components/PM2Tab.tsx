@@ -62,6 +62,8 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
   }, [])
 
   useEffect(() => {
+    if (activeTab !== 'pm2') return;
+
     // Connect to WebSocket for each wserver
     wservers.forEach(wserver => {
       connectToServer(wserver)
@@ -78,26 +80,34 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
       wsRefs.current = {}
       updateIntervals.current = {}
     }
-  }, [wservers])
+  }, [wservers, activeTab])
 
   useEffect(() => {
-    // Start update intervals when WebSocket is connected (assuming PM2Tab is active when rendered)
+    // Start or stop update intervals based on activeTab
     wservers.forEach(wserver => {
       const ws = wsRefs.current[wserver.id]
       if (ws && ws.readyState === WebSocket.OPEN) {
-        // Start update interval if not already running
-        if (!updateIntervals.current[wserver.id]) {
-          // Send immediately on start
-          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
-          updateIntervals.current[wserver.id] = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
-            }
-          }, 900) // Request pm2-list every 900ms
+        if (activeTab === 'pm2') {
+          // Start update interval if not already running
+          if (!updateIntervals.current[wserver.id]) {
+            // Send immediately on start
+            ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+            updateIntervals.current[wserver.id] = setInterval(() => {
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+              }
+            }, 900) // Request pm2-list every 900ms
+          }
+        } else {
+          // Stop intervals when not active
+          if (updateIntervals.current[wserver.id]) {
+            clearInterval(updateIntervals.current[wserver.id])
+            delete updateIntervals.current[wserver.id]
+          }
         }
       }
     })
-  }, [wservers])
+  }, [activeTab, wservers])
 
   useEffect(() => {
     // Force immediate update when activeTab becomes 'pm2'
@@ -180,8 +190,8 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
         }
       }, 100) // Small delay to ensure auth is processed
 
-      // Start update interval if not already running
-      if (!updateIntervals.current[wserver.id]) {
+      // Start update interval if activeTab is pm2
+      if (activeTab === 'pm2' && !updateIntervals.current[wserver.id]) {
         updateIntervals.current[wserver.id] = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
