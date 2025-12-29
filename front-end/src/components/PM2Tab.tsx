@@ -81,28 +81,35 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
   }, [wservers])
 
   useEffect(() => {
-    // Start or stop update intervals based on activeTab
+    // Start update intervals when WebSocket is connected (assuming PM2Tab is active when rendered)
     wservers.forEach(wserver => {
       const ws = wsRefs.current[wserver.id]
       if (ws && ws.readyState === WebSocket.OPEN) {
-        if (activeTab === 'pm2') {
-          // Start update interval if not already running
-          if (!updateIntervals.current[wserver.id]) {
-            updateIntervals.current[wserver.id] = setInterval(() => {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
-              }
-            }, 900) // Request pm2-list every 900ms
-          }
-        } else {
-          // Stop intervals when not active
-          if (updateIntervals.current[wserver.id]) {
-            clearInterval(updateIntervals.current[wserver.id])
-            delete updateIntervals.current[wserver.id]
-          }
+        // Start update interval if not already running
+        if (!updateIntervals.current[wserver.id]) {
+          // Send immediately on start
+          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+          updateIntervals.current[wserver.id] = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+            }
+          }, 900) // Request pm2-list every 900ms
         }
       }
     })
+  }, [wservers])
+
+  useEffect(() => {
+    // Force immediate update when activeTab becomes 'pm2'
+    if (activeTab === 'pm2') {
+      wservers.forEach(wserver => {
+        const ws = wsRefs.current[wserver.id]
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+          ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' }))
+        }
+      })
+    }
   }, [activeTab, wservers])
 
   useEffect(() => {
@@ -173,7 +180,14 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
         }
       }, 100) // Small delay to ensure auth is processed
 
-      // Intervals are managed by useEffect based on activeTab
+      // Start update interval if not already running
+      if (!updateIntervals.current[wserver.id]) {
+        updateIntervals.current[wserver.id] = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' }))
+          }
+        }, 900)
+      }
     }
 
     ws.onmessage = (event) => {
@@ -546,6 +560,7 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
     setSelectedProcesses(newSelected)
   }
 
+
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
@@ -623,16 +638,16 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
               <>
 
             <div className="overflow-hidden">
-              <table className="w-full text-sm text-left">
+              <table className="w-full text-sm text-left table-fixed">
                 <thead className="bg-gray-700">
                   <tr>
-                    <th className="px-1 py-2 text-xs font-medium text-gray-300 uppercase">
+                    <th className="w-12 px-1 py-2 text-xs font-medium text-gray-300 uppercase">
                       <select
                         value=""
                         onChange={(e) => handleSelectByStatus(wserver.id, e.target.value)}
                         onMouseDown={(e) => e.stopPropagation()}
                         onMouseUp={(e) => e.stopPropagation()}
-                        className="bg-gray-700 text-gray-300 text-xs rounded px-0.5 py-1 w-12"
+                        className="bg-gray-700 text-gray-300 text-xs rounded px-0.5 py-1 w-full"
                       >
                         <option value="">☑</option>
                         <option value="all">All</option>
@@ -642,15 +657,15 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                         <option value="unselect">Unselect</option>
                       </select>
                     </th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">ID</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Name</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">PID</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Status</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">CPU</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Memory</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Uptime</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">↻</th>
-                    <th className="px-4 py-2 text-xs font-medium text-gray-300 uppercase">Note</th>
+                    <th className="w-12 px-4 py-2 text-xs font-medium text-gray-300 uppercase">ID</th>
+                    <th className="w-32 px-4 py-2 text-xs font-medium text-gray-300 uppercase">Name</th>
+                    <th className="w-16 px-4 py-2 text-xs font-medium text-gray-300 uppercase">PID</th>
+                    <th className="w-20 px-4 py-2 text-xs font-medium text-gray-300 uppercase">Status</th>
+                    <th className="w-16 px-4 py-2 text-xs font-medium text-gray-300 uppercase">CPU</th>
+                    <th className="w-20 px-4 py-2 text-xs font-medium text-gray-300 uppercase">Memory</th>
+                    <th className="w-20 px-4 py-2 text-xs font-medium text-gray-300 uppercase">Uptime</th>
+                    <th className="w-12 px-4 py-2 text-xs font-medium text-gray-300 uppercase">↻</th>
+                    <th className="w-32 px-4 py-2 text-xs font-medium text-gray-300 uppercase">Note</th>
                   </tr>
                 </thead>
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -663,7 +678,7 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                         setContextMenu({ x: e.clientX, y: e.clientY, process, serverId: wserver.id })
                       }}
                     >
-                      <td className="px-2 py-2 text-white">
+                      <td className="w-12 px-2 py-2 text-white">
                         <input
                           type="checkbox"
                           checked={selectedProcesses[wserver.id]?.has(process.name) || false}
@@ -682,10 +697,10 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                           className="rounded"
                         />
                       </td>
-                      <td className="px-4 py-2 text-white">{process.pm_id}</td>
-                      <td className="px-4 py-2 text-white">{process.name}</td>
-                      <td className="px-4 py-2 text-white">{process.pid}</td>
-                      <td className="px-4 py-2 text-white">
+                      <td className="w-12 px-4 py-2 text-white">{process.pm_id}</td>
+                      <td className="w-32 px-4 py-2 text-white">{process.name}</td>
+                      <td className="w-16 px-4 py-2 text-white">{process.pid}</td>
+                      <td className="w-20 px-4 py-2 text-white">
                         <span className={`px-2 py-1 rounded text-xs ${
                           process.pm2_env.status === 'online' ? 'bg-green-600 text-white' :
                           process.pm2_env.status === 'stopped' ? 'bg-red-600 text-white' :
@@ -694,11 +709,11 @@ export default function PM2Tab({ activeTab }: PM2TabProps) {
                           {process.pm2_env.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-white">{process.monit.cpu.toFixed(1)}%</td>
-                      <td className="px-4 py-2 text-white">{formatBytes(process.monit.memory)}</td>
-                      <td className="px-4 py-2 text-white">{process.pm2_env.status === 'online' ? formatUptime(Date.now() - process.pm2_env.pm_uptime) : 'N/A'}</td>
-                      <td className="px-4 py-2 text-white">{process.pm2_env.restart_time}</td>
-                      <td className="px-4 py-2 text-white">
+                      <td className="w-16 px-4 py-2 text-white">{process.monit.cpu.toFixed(1)}%</td>
+                      <td className="w-20 px-4 py-2 text-white">{formatBytes(process.monit.memory)}</td>
+                      <td className="w-20 px-4 py-2 text-white">{process.pm2_env.status === 'online' ? formatUptime(Date.now() - process.pm2_env.pm_uptime) : 'N/A'}</td>
+                      <td className="w-12 px-4 py-2 text-white">{process.pm2_env.restart_time}</td>
+                      <td className="w-32 px-4 py-2 text-white">
                         <input
                           type="text"
                           value={notes[wserver.id]?.[process.name] || ''}
