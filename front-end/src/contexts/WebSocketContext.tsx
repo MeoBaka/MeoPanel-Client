@@ -53,6 +53,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children, 
 
     // Convert HTTP URL to WebSocket URL
     const wsUrl = wserver.url.replace(/^http/, 'ws')
+    console.log('Attempting WebSocket connection to:', wsUrl)
 
     const ws = new WebSocket(wsUrl)
 
@@ -79,7 +80,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children, 
     }
 
     ws.onerror = (error) => {
-      console.error('WebSocket error for server', wserver.servername, error)
+      console.error('WebSocket error for server', wserver.servername, 'URL:', wsUrl, 'Error:', error)
     }
 
     ws.onclose = (event) => {

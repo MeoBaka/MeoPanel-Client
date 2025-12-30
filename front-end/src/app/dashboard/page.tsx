@@ -8,6 +8,7 @@ import WServerTab from '@/components/WServerTab'
 import PM2Tab from '@/components/PM2Tab'
 import InstanceTab from '@/components/InstanceTab'
 import UserManagerTab from '@/components/UserManagerTab'
+import UserPermissionsTab from '@/components/UserPermissionsTab'
 import AdminLogTab from '@/components/AdminLogTab'
 import Header from '@/components/Header'
 
@@ -34,7 +35,7 @@ export default function Dashboard() {
     useEffect(() => {
       if (user) {
         const hasWServerAccess = user.role === 'ADMIN' || user.role === 'OWNER'
-        if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager' || activeTab === 'adminlog')) {
+        if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager' || activeTab === 'userpermissions' || activeTab === 'adminlog')) {
           setActiveTab('pm2')
         }
       }
@@ -116,6 +117,18 @@ export default function Dashboard() {
                 )}
                 {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
                   <button
+                    onClick={() => handleTabChange('userpermissions')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'userpermissions'
+                        ? 'border-blue-500 text-blue-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    User Permissions
+                  </button>
+                )}
+                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                  <button
                     onClick={() => handleTabChange('adminlog')}
                     className={`py-2 px-1 border-b-2 font-medium text-sm ${
                       activeTab === 'adminlog'
@@ -147,6 +160,11 @@ export default function Dashboard() {
                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
                  <div className={activeTab === 'usermanager' ? '' : 'hidden'}>
                    <UserManagerTab activeTab={activeTab} />
+                 </div>
+               )}
+               {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                 <div className={activeTab === 'userpermissions' ? '' : 'hidden'}>
+                   <UserPermissionsTab activeTab={activeTab} />
                  </div>
                )}
                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (

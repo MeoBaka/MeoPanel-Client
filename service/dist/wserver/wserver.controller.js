@@ -27,8 +27,9 @@ let WserverController = class WserverController {
         const wserver = await this.wserverService.create(wserverData);
         return { message: 'Wserver created successfully', data: wserver };
     }
-    async findAll() {
-        const wservers = await this.wserverService.findAll();
+    async findAll(req) {
+        const user = req.user;
+        const wservers = await this.wserverService.findAllForUser(user.id, user.role);
         return { message: 'Wservers retrieved successfully', data: wservers };
     }
     async findOne(id) {
@@ -51,6 +52,7 @@ let WserverController = class WserverController {
 exports.WserverController = WserverController;
 __decorate([
     (0, common_1.Post)(),
+    (0, common_1.UseGuards)(security_service_1.RolesGuard),
     (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -59,14 +61,14 @@ __decorate([
 ], WserverController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
-    (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
+    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard),
+    __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], WserverController.prototype, "findAll", null);
 __decorate([
     (0, common_1.Get)(':id'),
-    (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -74,6 +76,7 @@ __decorate([
 ], WserverController.prototype, "findOne", null);
 __decorate([
     (0, common_1.Put)(':id'),
+    (0, common_1.UseGuards)(security_service_1.RolesGuard),
     (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
@@ -83,6 +86,7 @@ __decorate([
 ], WserverController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
+    (0, common_1.UseGuards)(security_service_1.RolesGuard),
     (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
@@ -91,7 +95,6 @@ __decorate([
 ], WserverController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)(':id/status'),
-    (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -99,7 +102,6 @@ __decorate([
 ], WserverController.prototype, "getStatus", null);
 exports.WserverController = WserverController = __decorate([
     (0, common_1.Controller)('wservers'),
-    (0, common_1.UseGuards)(jwt_1.JwtAuthGuard, security_service_1.RolesGuard),
     __metadata("design:paramtypes", [wserver_service_1.WserverService])
 ], WserverController);
 //# sourceMappingURL=wserver.controller.js.map

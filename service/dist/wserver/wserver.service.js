@@ -17,9 +17,11 @@ const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const typeorm_2 = require("typeorm");
 const wserver_entity_1 = require("../entities/wserver.entity");
+const pm2_permissions_entity_1 = require("../entities/pm2-permissions.entity");
 let WserverService = class WserverService {
-    constructor(wserverRepository) {
+    constructor(wserverRepository, pm2PermissionsRepository) {
         this.wserverRepository = wserverRepository;
+        this.pm2PermissionsRepository = pm2PermissionsRepository;
     }
     async create(wserverData) {
         const wserver = this.wserverRepository.create(wserverData);
@@ -27,6 +29,22 @@ let WserverService = class WserverService {
     }
     async findAll() {
         return this.wserverRepository.find();
+    }
+    async findAllForUser(userId, userRole) {
+        if (userRole === 'ADMIN' || userRole === 'OWNER') {
+            return this.findAll();
+        }
+        const permissions = await this.pm2PermissionsRepository.find({
+            where: { userId },
+            select: ['wserverId'],
+        });
+        const wserverIds = [...new Set(permissions.map(p => p.wserverId))];
+        if (wserverIds.length === 0) {
+            return [];
+        }
+        return this.wserverRepository.find({
+            where: wserverIds.map(id => ({ id })),
+        });
     }
     async findOne(id) {
         const wserver = await this.wserverRepository.findOne({ where: { id } });
@@ -54,6 +72,8 @@ exports.WserverService = WserverService;
 exports.WserverService = WserverService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, typeorm_1.InjectRepository)(wserver_entity_1.Wserver)),
-    __metadata("design:paramtypes", [typeorm_2.Repository])
+    __param(1, (0, typeorm_1.InjectRepository)(pm2_permissions_entity_1.PM2Permissions)),
+    __metadata("design:paramtypes", [typeorm_2.Repository,
+        typeorm_2.Repository])
 ], WserverService);
 //# sourceMappingURL=wserver.service.js.map

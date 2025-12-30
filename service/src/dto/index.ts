@@ -15,3 +15,5 @@ export * from './get-two-factor-status.dto';
 export * from './audit-log.dto';
 export * from './create-wserver.dto';
 export * from './update-wserver.dto';
+export * from './create-pm2-permission.dto';
+export * from './update-pm2-permission.dto';

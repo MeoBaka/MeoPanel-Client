@@ -8,10 +8,13 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WsModule = void 0;
 const common_1 = require("@nestjs/common");
+const wserver_module_1 = require("../wserver/wserver.module");
 let WsModule = class WsModule {
 };
 exports.WsModule = WsModule;
 exports.WsModule = WsModule = __decorate([
-    (0, common_1.Module)({})
+    (0, common_1.Module)({
+        imports: [wserver_module_1.WserverModule],
+    })
 ], WsModule);
 //# sourceMappingURL=ws.module.js.map
