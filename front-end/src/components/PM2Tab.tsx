@@ -131,6 +131,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           ...prev,
           [serverId]: 'online'
         }))
+
+        // If this is the initial connection message and we're on PM2 tab, start realtime updates
+        const wserver = wservers.find(s => s.id === serverId)
+        if (wserver && activeTab === 'pm2' && !updateIntervals.current[serverId]) {
+          sendToServer(serverId, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
+          updateIntervals.current[serverId] = setTimeout(() => {}, 0)
+        }
       }
     } catch (error) {
       console.error('Failed to parse server message:', error)
@@ -154,46 +161,46 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     })
 
     return () => {
-      // Cleanup intervals
-      Object.values(updateIntervals.current).forEach(clearInterval)
+      // Cleanup realtime streams
+      wservers.forEach(wserver => {
+        if (isConnected(wserver.id)) {
+          sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-stop-list' })
+        }
+      })
+      Object.values(updateIntervals.current).forEach(clearTimeout)
       updateIntervals.current = {}
     }
   }, [wservers, activeTab, connectToServer, handleMessage])
 
   useEffect(() => {
-    // Start or stop update intervals based on activeTab
+    // Start or stop realtime updates based on activeTab
     wservers.forEach(wserver => {
       if (isConnected(wserver.id)) {
         if (activeTab === 'pm2') {
-          // Start update interval if not already running
+          // Start realtime updates if not already running
           if (!updateIntervals.current[wserver.id]) {
-            // Send immediately on start
+            // Send pm2-list to start realtime stream
             sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
-            updateIntervals.current[wserver.id] = setInterval(() => {
-              if (isConnected(wserver.id)) {
-                sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
-              }
-            }, 900) // Request pm2-list every 900ms
+            updateIntervals.current[wserver.id] = setTimeout(() => {}, 0) // Placeholder to mark as started
           }
-          // Ping is handled by pm2-list responses
         } else {
-          // Stop intervals when not active
+          // Stop realtime updates when not active
           if (updateIntervals.current[wserver.id]) {
-            clearInterval(updateIntervals.current[wserver.id])
+            // Send pm2-stop-list to stop the stream
+            sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-stop-list' })
+            clearTimeout(updateIntervals.current[wserver.id])
             delete updateIntervals.current[wserver.id]
           }
-          // No ping intervals to clean up
         }
       }
     })
   }, [activeTab, wservers, isConnected, sendToServer])
 
   useEffect(() => {
-    // Force immediate update when activeTab becomes 'pm2'
+    // Load notes when activeTab becomes 'pm2'
     if (activeTab === 'pm2') {
       wservers.forEach(wserver => {
         if (isConnected(wserver.id)) {
-          sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
           sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' })
         }
       })
