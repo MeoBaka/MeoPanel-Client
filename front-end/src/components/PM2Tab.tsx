@@ -119,7 +119,11 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         // Handle logs response
         setLogsModal(prev => {
           if (!prev) return null;
-          return { ...prev, logs: parsedMessage.data }
+          if (prev.logs.length === 1 && prev.logs[0] === 'Loading logs...') {
+            return { ...prev, logs: parsedMessage.data }
+          } else {
+            return { ...prev, logs: [...prev.logs, ...parsedMessage.data] }
+          }
         })
       } else {
         // Other messages
