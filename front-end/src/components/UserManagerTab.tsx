@@ -23,7 +23,7 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: '', email: '', role: '', status: 0 })
+  const [editForm, setEditForm] = useState({ name: '', role: '', status: 0 })
 
   useEffect(() => {
     fetchUsers()
@@ -71,7 +71,6 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
     setEditingUser(targetUser.id)
     setEditForm({
       name: targetUser.name || '',
-      email: targetUser.email,
       role: targetUser.role,
       status: targetUser.status,
     })
@@ -79,14 +78,14 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
 
   const cancelEdit = () => {
     setEditingUser(null)
-    setEditForm({ name: '', email: '', role: '', status: 0 })
+    setEditForm({ name: '', role: '', status: 0 })
   }
 
   const saveEdit = async (targetUser: User) => {
     try {
       const token = localStorage.getItem('accessToken')
 
-      // Update name and email
+      // Update name
       const updateResponse = await fetch(`http://localhost:5000/users/${targetUser.id}`, {
         method: 'PUT',
         headers: {
@@ -95,7 +94,6 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
         },
         body: JSON.stringify({
           name: editForm.name,
-          email: editForm.email,
         }),
       })
 
@@ -174,16 +172,7 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-white">{u.username}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-white">
-                  {editingUser === u.id ? (
-                    <input
-                      type="email"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                      className="bg-gray-700 text-white px-2 py-1 rounded"
-                    />
-                  ) : (
-                    u.email
-                  )}
+                  {u.email}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-white">
                   {editingUser === u.id && canEditRole(u) ? (
