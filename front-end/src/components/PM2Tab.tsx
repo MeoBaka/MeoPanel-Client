@@ -55,7 +55,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
    const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
    const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
    const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
-   const [fileBrowserModal, setFileBrowserModal] = useState<{serverId: string, process: PM2Process, currentPath: string, files: any[], openFiles: {file: any, content: string, path: string, originalContent: string, modified: boolean}[], activeTabIndex: number, sidebarWidth: number, wordWrap: boolean, sidebarVisible: boolean} | null>(null)
+   const [fileBrowserModal, setFileBrowserModal] = useState<{serverId: string, process: PM2Process, currentPath: string, files: any[], openFiles: {file: any, content: string, path: string, originalContent: string, modified: boolean}[], activeTabIndex: number, sidebarWidth: number, wordWrap: boolean, sidebarVisible: boolean, selectedFiles: Set<string>, clipboard: {type: 'cut' | 'copy', files: any[]} | null, contextMenu: {x: number, y: number, file: any} | null, isSelecting: boolean, selectionStart: number | null, renamingFile: string | null} | null>(null)
    const [saveToast, setSaveToast] = useState<string | null>(null)
    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
@@ -72,6 +72,16 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
      document.addEventListener('click', handleClickOutside)
      return () => document.removeEventListener('click', handleClickOutside)
    }, [])
+
+   useEffect(() => {
+     const handleClickOutsideFileBrowser = () => {
+       if (fileBrowserModal?.contextMenu) {
+         setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+       }
+     }
+     document.addEventListener('click', handleClickOutsideFileBrowser)
+     return () => document.removeEventListener('click', handleClickOutsideFileBrowser)
+   }, [fileBrowserModal?.contextMenu])
 
    // Prevent body scrolling when file browser modal is open
    useEffect(() => {
@@ -582,7 +592,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         activeTabIndex: -1,
         sidebarWidth: 256,
         wordWrap: true,
-        sidebarVisible: true
+        sidebarVisible: true,
+        selectedFiles: new Set(),
+        clipboard: null,
+        contextMenu: null,
+        isSelecting: false,
+        selectionStart: null,
+        renamingFile: null
       })
       // Request files
       sendToServer(serverId, {
@@ -607,6 +623,173 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       })
       // Clear command
       setLogsModal(prev => prev ? { ...prev, command: '' } : null)
+    }
+  }
+
+  // File operations
+  const createFile = (fileName: string) => {
+    if (!fileBrowserModal) return
+    const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
+    if (wserver && isConnected(fileBrowserModal.serverId)) {
+      const filePath = fileBrowserModal.currentPath ? `${fileBrowserModal.currentPath}/${fileName}` : fileName
+      sendToServer(fileBrowserModal.serverId, {
+        command: 'pm2-create-file',
+        id: fileBrowserModal.process.pm_id,
+        relativePath: filePath,
+        content: '',
+        uuid: wserver.uuid,
+        token: wserver.token
+      })
+      // Refresh file list
+      setTimeout(() => {
+        sendToServer(fileBrowserModal.serverId, {
+          command: 'pm2-list-files',
+          id: fileBrowserModal.process.pm_id,
+          relativePath: fileBrowserModal.currentPath,
+          uuid: wserver.uuid,
+          token: wserver.token
+        })
+      }, 500)
+    }
+  }
+
+  const renameFile = (oldPath: string, newName: string) => {
+    if (!fileBrowserModal) return
+    const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
+    if (wserver && isConnected(fileBrowserModal.serverId)) {
+      sendToServer(fileBrowserModal.serverId, {
+        command: 'pm2-rename-file',
+        id: fileBrowserModal.process.pm_id,
+        oldPath,
+        newName,
+        uuid: wserver.uuid,
+        token: wserver.token
+      })
+      // Refresh file list
+      setTimeout(() => {
+        sendToServer(fileBrowserModal.serverId, {
+          command: 'pm2-list-files',
+          id: fileBrowserModal.process.pm_id,
+          relativePath: fileBrowserModal.currentPath,
+          uuid: wserver.uuid,
+          token: wserver.token
+        })
+      }, 500)
+    }
+  }
+
+  const deleteFiles = (filePaths: string[]) => {
+    if (!fileBrowserModal) return
+    const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
+    if (wserver && isConnected(fileBrowserModal.serverId)) {
+      sendToServer(fileBrowserModal.serverId, {
+        command: 'pm2-delete-files',
+        id: fileBrowserModal.process.pm_id,
+        filePaths,
+        uuid: wserver.uuid,
+        token: wserver.token
+      })
+      // Refresh file list
+      setTimeout(() => {
+        sendToServer(fileBrowserModal.serverId, {
+          command: 'pm2-list-files',
+          id: fileBrowserModal.process.pm_id,
+          relativePath: fileBrowserModal.currentPath,
+          uuid: wserver.uuid,
+          token: wserver.token
+        })
+      }, 500)
+    }
+  }
+
+  const copyFiles = (filePaths: string[]) => {
+    if (!fileBrowserModal) return
+    const files = fileBrowserModal.files.filter(f => filePaths.includes(fileBrowserModal.currentPath ? `${fileBrowserModal.currentPath}/${f.name}` : f.name))
+    setFileBrowserModal(prev => prev ? { ...prev, clipboard: { type: 'copy', files }, selectedFiles: new Set() } : null)
+  }
+
+  const cutFiles = (filePaths: string[]) => {
+    if (!fileBrowserModal) return
+    const files = fileBrowserModal.files.filter(f => filePaths.includes(fileBrowserModal.currentPath ? `${fileBrowserModal.currentPath}/${f.name}` : f.name))
+    setFileBrowserModal(prev => prev ? { ...prev, clipboard: { type: 'cut', files }, selectedFiles: new Set() } : null)
+  }
+
+  const pasteFiles = () => {
+    if (!fileBrowserModal || !fileBrowserModal.clipboard) return
+    const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
+    if (wserver && isConnected(fileBrowserModal.serverId)) {
+      sendToServer(fileBrowserModal.serverId, {
+        command: 'pm2-paste-files',
+        id: fileBrowserModal.process.pm_id,
+        clipboard: fileBrowserModal.clipboard,
+        destinationPath: fileBrowserModal.currentPath,
+        uuid: wserver.uuid,
+        token: wserver.token
+      })
+      // Clear clipboard if it was cut
+      if (fileBrowserModal.clipboard.type === 'cut') {
+        setFileBrowserModal(prev => prev ? { ...prev, clipboard: null } : null)
+      }
+      // Refresh file list
+      setTimeout(() => {
+        sendToServer(fileBrowserModal.serverId, {
+          command: 'pm2-list-files',
+          id: fileBrowserModal.process.pm_id,
+          relativePath: fileBrowserModal.currentPath,
+          uuid: wserver.uuid,
+          token: wserver.token
+        })
+      }, 500)
+    }
+  }
+
+  const zipFiles = (filePaths: string[], zipName: string) => {
+    if (!fileBrowserModal) return
+    const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
+    if (wserver && isConnected(fileBrowserModal.serverId)) {
+      sendToServer(fileBrowserModal.serverId, {
+        command: 'pm2-zip-files',
+        id: fileBrowserModal.process.pm_id,
+        filePaths,
+        zipName,
+        uuid: wserver.uuid,
+        token: wserver.token
+      })
+      // Refresh file list
+      setTimeout(() => {
+        sendToServer(fileBrowserModal.serverId, {
+          command: 'pm2-list-files',
+          id: fileBrowserModal.process.pm_id,
+          relativePath: fileBrowserModal.currentPath,
+          uuid: wserver.uuid,
+          token: wserver.token
+        })
+      }, 500)
+    }
+  }
+
+  const unzipFile = (zipPath: string) => {
+    if (!fileBrowserModal) return
+    const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
+    if (wserver && isConnected(fileBrowserModal.serverId)) {
+      sendToServer(fileBrowserModal.serverId, {
+        command: 'pm2-unzip-file',
+        id: fileBrowserModal.process.pm_id,
+        zipPath,
+        destinationPath: fileBrowserModal.currentPath,
+        uuid: wserver.uuid,
+        token: wserver.token
+      })
+      // Refresh file list
+      setTimeout(() => {
+        sendToServer(fileBrowserModal.serverId, {
+          command: 'pm2-list-files',
+          id: fileBrowserModal.process.pm_id,
+          relativePath: fileBrowserModal.currentPath,
+          uuid: wserver.uuid,
+          token: wserver.token
+        })
+      }, 500)
     }
   }
 
@@ -1093,7 +1276,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
       {fileBrowserModal && (
         <div className="fixed inset-0 z-50 bg-gray-900 overflow-hidden">
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col max-h-screen">
             {/* Header */}
             <div className="bg-gray-800 border-b border-gray-700 px-4 py-1 flex justify-between items-center">
               <div className="flex items-center">
@@ -1103,6 +1286,85 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                 <span className="text-gray-300 text-sm">{fileBrowserModal.process.pm2_env.pm_cwd}{fileBrowserModal.currentPath}</span>
               </div>
               <div className="flex items-center space-x-2">
+                {/* File Operations */}
+                <button
+                  onClick={() => {
+                    const fileName = prompt('Enter file name:')
+                    if (fileName) {
+                      createFile(fileName)
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Create File"
+                >
+                  📄+
+                </button>
+                <button
+                  onClick={() => {
+                    if (fileBrowserModal!.selectedFiles.size > 0) {
+                      copyFiles(Array.from(fileBrowserModal!.selectedFiles))
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Copy Selected"
+                  disabled={fileBrowserModal.selectedFiles.size === 0}
+                >
+                  📋
+                </button>
+                <button
+                  onClick={() => {
+                    if (fileBrowserModal!.selectedFiles.size > 0) {
+                      cutFiles(Array.from(fileBrowserModal!.selectedFiles))
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Cut Selected"
+                  disabled={fileBrowserModal.selectedFiles.size === 0}
+                >
+                  ✂
+                </button>
+                <button
+                  onClick={() => {
+                    if (fileBrowserModal!.clipboard) {
+                      pasteFiles()
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Paste"
+                  disabled={!fileBrowserModal.clipboard}
+                >
+                  📄
+                </button>
+                <button
+                  onClick={() => {
+                    if (fileBrowserModal!.selectedFiles.size > 0) {
+                      if (confirm(`Delete ${fileBrowserModal!.selectedFiles.size} selected items?`)) {
+                        deleteFiles(Array.from(fileBrowserModal!.selectedFiles))
+                      }
+                    }
+                  }}
+                  className="text-gray-400 hover:text-red-400 p-1"
+                  title="Delete Selected"
+                  disabled={fileBrowserModal.selectedFiles.size === 0}
+                >
+                  🗑
+                </button>
+                <button
+                  onClick={() => {
+                    if (fileBrowserModal!.selectedFiles.size > 0) {
+                      const zipName = prompt('Enter zip file name:', 'archive.zip')
+                      if (zipName) {
+                        zipFiles(Array.from(fileBrowserModal!.selectedFiles), zipName)
+                      }
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Zip Selected"
+                  disabled={fileBrowserModal.selectedFiles.size === 0}
+                >
+                  📦
+                </button>
+                <div className="w-px h-4 bg-gray-600"></div>
                 <button
                   onClick={() => {
                     const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
@@ -1133,11 +1395,11 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
 
             {/* Main Content */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex overflow-hidden min-h-0">
               {fileBrowserModal.sidebarVisible && (
                 <>
                   {/* Sidebar - File Explorer */}
-                  <div className="bg-gray-800 border-r border-gray-700 flex flex-col" style={{ width: fileBrowserModal.sidebarWidth }}>
+                  <div className="bg-gray-800 border-r border-gray-700 flex flex-col min-h-0" style={{ width: fileBrowserModal.sidebarWidth }}>
                     <div className="p-3 border-b border-gray-700">
                       <h3 className="text-white font-medium text-sm">EXPLORER</h3>
                     </div>
@@ -1187,56 +1449,211 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                         </div>
 
                         {/* Files List */}
-                        <div className="space-y-1">
-                          {fileBrowserModal.files.map((file: any, index: number) => (
-                            <div
-                              key={index}
-                              onClick={() => {
-                                if (file.isDirectory) {
-                                  const newPath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${file.name}` : file.name
-                                  setFileBrowserModal(prev => prev ? { ...prev, currentPath: newPath } : null)
-                                  const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
-                                  if (wserver && isConnected(fileBrowserModal!.serverId)) {
-                                    sendToServer(fileBrowserModal!.serverId, {
-                                      command: 'pm2-list-files',
-                                      id: fileBrowserModal!.process.pm_id,
-                                      relativePath: newPath,
-                                      uuid: wserver.uuid,
-                                      token: wserver.token
-                                    });
-                                  }
-                                } else {
-                                  const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${file.name}` : file.name
-                                  setFileBrowserModal(prev => {
-                                    if (!prev) return null
-                                    const existingIndex = prev.openFiles.findIndex(f => f.path === filePath)
-                                    if (existingIndex >= 0) {
-                                      return { ...prev, activeTabIndex: existingIndex }
+                        <div
+                          className="flex-1 overflow-y-auto space-y-1 select-none min-h-0"
+                          onMouseDown={(e) => {
+                            if (e.target === e.currentTarget) {
+                              // Click on empty space - clear selection
+                              setFileBrowserModal(prev => prev ? { ...prev, selectedFiles: new Set() } : null)
+                            }
+                          }}
+                          onContextMenu={(e) => {
+                            // Right-click on empty space
+                            if (e.target === e.currentTarget) {
+                              e.preventDefault()
+                              setFileBrowserModal(prev => prev ? {
+                                ...prev,
+                                contextMenu: { x: e.clientX, y: e.clientY, file: null },
+                                selectedFiles: new Set()
+                              } : null)
+                            }
+                          }}
+                        >
+                          {fileBrowserModal.files.map((file: any, index: number) => {
+                            const filePath = fileBrowserModal.currentPath ? `${fileBrowserModal.currentPath}/${file.name}` : file.name
+                            const isSelected = fileBrowserModal.selectedFiles.has(filePath)
+                            const isRenaming = fileBrowserModal.renamingFile === filePath
+
+                            return (
+                              <div
+                                key={index}
+                                draggable={!isRenaming}
+                                onMouseDown={(e) => {
+                                  if (isRenaming) return
+                                  e.preventDefault()
+                                  const newSelected = new Set(fileBrowserModal!.selectedFiles)
+
+                                  if (e.ctrlKey || e.metaKey) {
+                                    // Ctrl+click: toggle selection
+                                    if (isSelected) {
+                                      newSelected.delete(filePath)
                                     } else {
-                                      const newOpenFiles = [...prev.openFiles, { file, content: '', path: filePath, originalContent: '', modified: false }]
-                                      return { ...prev, openFiles: newOpenFiles, activeTabIndex: newOpenFiles.length - 1 }
+                                      newSelected.add(filePath)
                                     }
-                                  })
-                                  const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
-                                  if (wserver && isConnected(fileBrowserModal!.serverId)) {
-                                    sendToServer(fileBrowserModal!.serverId, {
-                                      command: 'pm2-read-file',
-                                      id: fileBrowserModal!.process.pm_id,
-                                      relativePath: filePath,
-                                      uuid: wserver.uuid,
-                                      token: wserver.token
-                                    });
+                                  } else if (e.shiftKey && fileBrowserModal!.selectionStart !== null) {
+                                    // Shift+click: range selection
+                                    const startIndex = fileBrowserModal!.selectionStart
+                                    const endIndex = index
+                                    const minIndex = Math.min(startIndex, endIndex)
+                                    const maxIndex = Math.max(startIndex, endIndex)
+
+                                    for (let i = minIndex; i <= maxIndex; i++) {
+                                      const f = fileBrowserModal!.files[i]
+                                      const p = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${f.name}` : f.name
+                                      newSelected.add(p)
+                                    }
+                                  } else {
+                                    // Single click: start new selection
+                                    newSelected.clear()
+                                    newSelected.add(filePath)
+                                    setFileBrowserModal(prev => prev ? { ...prev, selectionStart: index } : null)
                                   }
-                                }
-                              }}
-                              className={`flex items-center p-1 rounded cursor-pointer hover:bg-gray-700 text-sm ${
-                                file.isDirectory ? 'text-blue-400' : 'text-gray-300'
-                              }`}
-                            >
-                              <span className="mr-2">{file.isDirectory ? '📁' : '📄'}</span>
-                              <span className="truncate">{file.name}</span>
-                            </div>
-                          ))}
+
+                                  setFileBrowserModal(prev => prev ? { ...prev, selectedFiles: newSelected, isSelecting: true } : null)
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (fileBrowserModal!.isSelecting && e.buttons === 1) {
+                                    // Drag selection
+                                    const newSelected = new Set(fileBrowserModal!.selectedFiles)
+                                    const startIndex = fileBrowserModal!.selectionStart!
+                                    const endIndex = index
+                                    const minIndex = Math.min(startIndex, endIndex)
+                                    const maxIndex = Math.max(startIndex, endIndex)
+
+                                    newSelected.clear()
+                                    for (let i = minIndex; i <= maxIndex; i++) {
+                                      const f = fileBrowserModal!.files[i]
+                                      const p = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${f.name}` : f.name
+                                      newSelected.add(p)
+                                    }
+
+                                    setFileBrowserModal(prev => prev ? { ...prev, selectedFiles: newSelected } : null)
+                                  }
+                                }}
+                                onMouseUp={() => {
+                                  setFileBrowserModal(prev => prev ? { ...prev, isSelecting: false } : null)
+                                }}
+                                onDragStart={(e) => {
+                                  if (isRenaming) return
+                                  e.dataTransfer.setData('text/plain', filePath)
+                                  e.dataTransfer.effectAllowed = 'move'
+                                }}
+                                onDragOver={(e) => {
+                                  if (file.isDirectory && !isRenaming) {
+                                    e.preventDefault()
+                                    e.dataTransfer.dropEffect = 'move'
+                                  }
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault()
+                                  if (file.isDirectory && !isRenaming) {
+                                    const draggedPath = e.dataTransfer.getData('text/plain')
+                                    if (draggedPath && draggedPath !== filePath) {
+                                      const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                      if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                        sendToServer(fileBrowserModal!.serverId, {
+                                          command: 'pm2-move-file',
+                                          id: fileBrowserModal!.process.pm_id,
+                                          sourcePath: draggedPath,
+                                          destinationPath: filePath,
+                                          uuid: wserver.uuid,
+                                          token: wserver.token
+                                        })
+                                        // Refresh file list
+                                        setTimeout(() => {
+                                          sendToServer(fileBrowserModal!.serverId, {
+                                            command: 'pm2-list-files',
+                                            id: fileBrowserModal!.process.pm_id,
+                                            relativePath: fileBrowserModal!.currentPath,
+                                            uuid: wserver.uuid,
+                                            token: wserver.token
+                                          })
+                                        }, 500)
+                                      }
+                                    }
+                                  }
+                                }}
+                                onDoubleClick={() => {
+                                  if (isRenaming) return
+
+                                  if (file.isDirectory) {
+                                    const newPath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${file.name}` : file.name
+                                    setFileBrowserModal(prev => prev ? { ...prev, currentPath: newPath } : null)
+                                    const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                    if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                      sendToServer(fileBrowserModal!.serverId, {
+                                        command: 'pm2-list-files',
+                                        id: fileBrowserModal!.process.pm_id,
+                                        relativePath: newPath,
+                                        uuid: wserver.uuid,
+                                        token: wserver.token
+                                      });
+                                    }
+                                  } else {
+                                    setFileBrowserModal(prev => {
+                                      if (!prev) return null
+                                      const existingIndex = prev.openFiles.findIndex(f => f.path === filePath)
+                                      if (existingIndex >= 0) {
+                                        return { ...prev, activeTabIndex: existingIndex }
+                                      } else {
+                                        const newOpenFiles = [...prev.openFiles, { file, content: '', path: filePath, originalContent: '', modified: false }]
+                                        return { ...prev, openFiles: newOpenFiles, activeTabIndex: newOpenFiles.length - 1 }
+                                      }
+                                    })
+                                    const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                    if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                      sendToServer(fileBrowserModal!.serverId, {
+                                        command: 'pm2-read-file',
+                                        id: fileBrowserModal!.process.pm_id,
+                                        relativePath: filePath,
+                                        uuid: wserver.uuid,
+                                        token: wserver.token
+                                      });
+                                    }
+                                  }
+                                }}
+                                onContextMenu={(e) => {
+                                  e.preventDefault()
+                                  if (isRenaming) return
+                                  setFileBrowserModal(prev => prev ? { ...prev, contextMenu: { x: e.clientX, y: e.clientY, file } } : null)
+                                }}
+                                className={`flex items-center p-1 rounded cursor-pointer hover:bg-gray-700 text-sm ${
+                                  isSelected ? 'bg-blue-600 text-white' : ''
+                                } ${file.isDirectory ? 'text-blue-400' : 'text-gray-300'}`}
+                              >
+                                <span className="mr-2">{file.isDirectory ? '📁' : '📄'}</span>
+                                {isRenaming ? (
+                                  <input
+                                    type="text"
+                                    defaultValue={file.name}
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        const newName = (e.target as HTMLInputElement).value.trim()
+                                        if (newName && newName !== file.name) {
+                                          renameFile(filePath, newName)
+                                        }
+                                        setFileBrowserModal(prev => prev ? { ...prev, renamingFile: null } : null)
+                                      } else if (e.key === 'Escape') {
+                                        setFileBrowserModal(prev => prev ? { ...prev, renamingFile: null } : null)
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      const newName = e.target.value.trim()
+                                      if (newName && newName !== file.name) {
+                                        renameFile(filePath, newName)
+                                      }
+                                      setFileBrowserModal(prev => prev ? { ...prev, renamingFile: null } : null)
+                                    }}
+                                    className="flex-1 bg-gray-600 text-white border-none outline-none px-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                ) : (
+                                  <span className="truncate">{file.name}</span>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     </div>
@@ -1479,6 +1896,127 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {fileBrowserModal?.contextMenu && (
+        <div
+          className="fixed z-50 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1"
+          style={{ left: fileBrowserModal.contextMenu.x, top: fileBrowserModal.contextMenu.y }}
+        >
+          {fileBrowserModal.contextMenu.file ? (
+            // Context menu for files
+            <>
+              <button
+                onClick={() => {
+                  const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${fileBrowserModal!.contextMenu!.file.name}` : fileBrowserModal!.contextMenu!.file.name
+                  copyFiles([filePath])
+                  setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                Copy
+              </button>
+              <button
+                onClick={() => {
+                  const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${fileBrowserModal!.contextMenu!.file.name}` : fileBrowserModal!.contextMenu!.file.name
+                  cutFiles([filePath])
+                  setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                Cut
+              </button>
+              <button
+                onClick={() => {
+                  const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${fileBrowserModal!.contextMenu!.file.name}` : fileBrowserModal!.contextMenu!.file.name
+                  setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null, renamingFile: filePath } : null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                Rename
+              </button>
+              <button
+                onClick={() => {
+                  const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${fileBrowserModal!.contextMenu!.file.name}` : fileBrowserModal!.contextMenu!.file.name
+                  if (confirm(`Delete ${fileBrowserModal!.contextMenu!.file.name}?`)) {
+                    deleteFiles([filePath])
+                  }
+                  setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
+              >
+                Delete
+              </button>
+              {!fileBrowserModal.contextMenu.file.isDirectory && (
+                <button
+                  onClick={() => {
+                    const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${fileBrowserModal!.contextMenu!.file.name}` : fileBrowserModal!.contextMenu!.file.name
+                    const zipName = prompt('Enter zip file name:', `${fileBrowserModal!.contextMenu!.file.name}.zip`)
+                    if (zipName) {
+                      zipFiles([filePath], zipName)
+                    }
+                    setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+                >
+                  Zip
+                </button>
+              )}
+              {fileBrowserModal.contextMenu.file.name.endsWith('.zip') && (
+                <button
+                  onClick={() => {
+                    const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${fileBrowserModal!.contextMenu!.file.name}` : fileBrowserModal!.contextMenu!.file.name
+                    unzipFile(filePath)
+                    setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+                >
+                  Unzip
+                </button>
+              )}
+            </>
+          ) : (
+            // Context menu for empty space
+            <>
+              <button
+                onClick={() => {
+                  const fileName = prompt('Enter file name:')
+                  if (fileName) {
+                    createFile(fileName)
+                  }
+                  setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                New File
+              </button>
+              <button
+                onClick={() => {
+                  const folderName = prompt('Enter folder name:')
+                  if (folderName) {
+                    // For now, create folder as a file (backend needs to handle creating directories)
+                    createFile(folderName + '/')
+                  }
+                  setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                New Folder
+              </button>
+              {fileBrowserModal.clipboard && (
+                <button
+                  onClick={() => {
+                    pasteFiles()
+                    setFileBrowserModal(prev => prev ? { ...prev, contextMenu: null } : null)
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+                >
+                  Paste
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
 
