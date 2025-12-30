@@ -211,6 +211,35 @@ let AuditService = class AuditService {
             relations: ['user'],
         });
     }
+    async getFilteredAuditLogs(filters, limit = 50, offset = 0) {
+        const queryBuilder = this.auditLogsRepository.createQueryBuilder('auditLog')
+            .leftJoinAndSelect('auditLog.user', 'user')
+            .orderBy('auditLog.createdAt', 'DESC')
+            .take(limit)
+            .skip(offset);
+        if (filters.username) {
+            queryBuilder.andWhere('user.username = :username', { username: filters.username });
+        }
+        if (filters.action) {
+            queryBuilder.andWhere('auditLog.action = :action', { action: filters.action });
+        }
+        if (filters.resource) {
+            queryBuilder.andWhere('auditLog.resource = :resource', { resource: filters.resource });
+        }
+        if (filters.startDate && filters.endDate) {
+            queryBuilder.andWhere('auditLog.createdAt BETWEEN :startDate AND :endDate', {
+                startDate: filters.startDate,
+                endDate: filters.endDate,
+            });
+        }
+        else if (filters.startDate) {
+            queryBuilder.andWhere('auditLog.createdAt >= :startDate', { startDate: filters.startDate });
+        }
+        else if (filters.endDate) {
+            queryBuilder.andWhere('auditLog.createdAt <= :endDate', { endDate: filters.endDate });
+        }
+        return queryBuilder.getManyAndCount();
+    }
 };
 exports.AuditService = AuditService;
 exports.AuditService = AuditService = __decorate([

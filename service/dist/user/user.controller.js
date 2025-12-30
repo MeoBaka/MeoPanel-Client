@@ -39,6 +39,14 @@ let UserController = class UserController {
         const user = await this.userService.update(uuid, userData);
         return { message: 'User updated successfully', data: user };
     }
+    async updateRole(uuid, roleData) {
+        const user = await this.userService.updateRole(uuid, roleData);
+        return { message: 'User role updated successfully', data: user };
+    }
+    async updateStatus(uuid, statusData) {
+        const user = await this.userService.updateStatus(uuid, statusData);
+        return { message: 'User status updated successfully', data: user };
+    }
     async remove(uuid) {
         await this.userService.remove(uuid);
         return { message: 'User deleted successfully' };
@@ -77,6 +85,24 @@ __decorate([
     __metadata("design:paramtypes", [String, dto_1.UpdateUserDto]),
     __metadata("design:returntype", Promise)
 ], UserController.prototype, "update", null);
+__decorate([
+    (0, common_1.Put)(':uuid/role'),
+    (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
+    __param(0, (0, common_1.Param)('uuid')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, dto_1.UpdateUserRoleDto]),
+    __metadata("design:returntype", Promise)
+], UserController.prototype, "updateRole", null);
+__decorate([
+    (0, common_1.Put)(':uuid/status'),
+    (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),
+    __param(0, (0, common_1.Param)('uuid')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, dto_1.UpdateUserStatusDto]),
+    __metadata("design:returntype", Promise)
+], UserController.prototype, "updateStatus", null);
 __decorate([
     (0, common_1.Delete)(':uuid'),
     (0, security_service_1.Roles)(user_entity_1.UserRole.ADMIN, user_entity_1.UserRole.OWNER),

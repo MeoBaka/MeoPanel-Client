@@ -1,5 +1,7 @@
 export * from './create-user.dto';
 export * from './update-user.dto';
+export * from './update-user-role.dto';
+export * from './update-user-status.dto';
 export * from './register.dto';
 export * from './login.dto';
 export * from './generate-verification-token.dto';
@@ -11,3 +13,5 @@ export * from './disable-two-factor.dto';
 export * from './regenerate-backup-codes.dto';
 export * from './get-two-factor-status.dto';
 export * from './audit-log.dto';
+export * from './create-wserver.dto';
+export * from './update-wserver.dto';

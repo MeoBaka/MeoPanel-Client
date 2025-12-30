@@ -17,56 +17,79 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
-          MeoPanel Authentication
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-400">
-          Complete authentication system with 2FA
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-gray-800 border border-gray-700 py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <div className="flex space-x-1 mb-6">
-            <button
-              onClick={() => setActiveTab('login')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
-                activeTab === 'login'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Login
-            </button>
-            <button
-              onClick={() => setActiveTab('register')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
-                activeTab === 'register'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Register
-            </button>
-            <button
-              onClick={() => setActiveTab('forgot')}
-              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
-                activeTab === 'forgot'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Forgot Password
-            </button>
+    <div className="min-h-screen bg-gray-900 text-white">
+      {/* Header */}
+      <header className="bg-gray-800 border-b border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-blue-400">MeoPanel Client</h1>
+            </div>
           </div>
-
-          {activeTab === 'login' && <LoginForm />}
-          {activeTab === 'register' && <RegisterForm />}
-          {activeTab === 'forgot' && <ForgotPasswordForm />}
         </div>
-      </div>
+      </header>
+
+      {/* Main */}
+      <main className="flex-1 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
+            MeoPanel Authentication
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-400">
+            Complete authentication system with 2FA
+          </p>
+        </div>
+
+        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="bg-gray-800 border border-gray-700 py-8 px-4 shadow sm:rounded-lg sm:px-10">
+            <div className="flex space-x-1 mb-6">
+              <button
+                onClick={() => setActiveTab('login')}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
+                  activeTab === 'login'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Login
+              </button>
+              <button
+                onClick={() => setActiveTab('register')}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
+                  activeTab === 'register'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Register
+              </button>
+              <button
+                onClick={() => setActiveTab('forgot')}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md ${
+                  activeTab === 'forgot'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                }`}
+              >
+                Forgot Password
+              </button>
+            </div>
+
+            {activeTab === 'login' && <LoginForm />}
+            {activeTab === 'register' && <RegisterForm />}
+            {activeTab === 'forgot' && <ForgotPasswordForm />}
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-gray-800 border-t border-gray-700">
+        <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+          <div className="text-center text-gray-400">
+            <p>&copy; 2024 MeoPanel Client. All rights reserved.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   )
 }

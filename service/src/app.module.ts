@@ -5,6 +5,7 @@ import { UserModule } from './user/user.module';
 import { WsModule } from './ws/ws.module';
 import { DatabaseModule } from './database.module';
 import { AuditModule } from './audit/audit.module';
+import { WserverModule } from './wserver/wserver.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AuditModule } from './audit/audit.module';
     UserModule,
     WsModule,
     AuditModule,
+    WserverModule,
   ],
 })
 export class AppModule {}

@@ -1,84 +1,161 @@
 'use client'
 
 import { useAuth } from '@/contexts/AuthContext'
+import { WebSocketProvider } from '@/contexts/WebSocketContext'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import WServerTab from '@/components/WServerTab'
+import PM2Tab from '@/components/PM2Tab'
+import InstanceTab from '@/components/InstanceTab'
+import UserManagerTab from '@/components/UserManagerTab'
+import AdminLogTab from '@/components/AdminLogTab'
+import Header from '@/components/Header'
+
+export const dynamic = 'force-dynamic'
 
 export default function Dashboard() {
-  const { user, logout } = useAuth()
-  const [showUserMenu, setShowUserMenu] = useState(false)
-  const router = useRouter()
+   const { user, logout, isLoading } = useAuth()
+    const [activeTab, setActiveTab] = useState('pm2')
+    const router = useRouter()
 
-  if (!user) {
-    router.push('/')
-    return null
-  }
+    useEffect(() => {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('activeTab')
+        if (saved) setActiveTab(saved)
+      }
+    }, [])
+
+    useEffect(() => {
+      if (typeof window !== 'undefined' && !isLoading && !user) {
+        router.push('/')
+      }
+    }, [user, isLoading, router])
+
+    useEffect(() => {
+      if (user) {
+        const hasWServerAccess = user.role === 'ADMIN' || user.role === 'OWNER'
+        if (!hasWServerAccess && (activeTab === 'wserver' || activeTab === 'usermanager' || activeTab === 'adminlog')) {
+          setActiveTab('pm2')
+        }
+      }
+    }, [user, activeTab])
+
+   const handleTabChange = (tab: string) => {
+     setActiveTab(tab)
+     localStorage.setItem('activeTab', tab)
+   }
+
+   if (isLoading) {
+     return (
+       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+       </div>
+     )
+   }
+
+   if (!user) {
+     return null
+   }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <button
-                onClick={() => router.push('/')}
-                className="text-2xl font-bold text-blue-400 hover:text-blue-300 transition-colors"
-              >
-                MeoPanel Client
-              </button>
-            </div>
-            <nav className="flex space-x-4 relative">
-              <div className="relative">
-                <button
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="text-white hover:text-gray-300 transition-colors"
-                >
-                  {user.name || user.username} ▼
-                </button>
-                {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-md shadow-lg z-10">
-                    <button
-                      onClick={() => {
-                        router.push('/dashboard')
-                        setShowUserMenu(false)
-                      }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
-                    >
-                      Dashboard
-                    </button>
-                    <button
-                      onClick={() => {
-                        router.push('/settings')
-                        setShowUserMenu(false)
-                      }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
-                    >
-                      Settings
-                    </button>
-                    <button
-                      onClick={() => {
-                        logout()
-                        setShowUserMenu(false)
-                      }}
-                      className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
-              </div>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <Header user={user} logout={logout} />
 
       {/* Main */}
       <main className="flex-1">
         <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-bold text-white mb-8">Dashboard</h2>
-          <p className="text-gray-400">Welcome to your MeoPanel Dashboard. This is where you'll manage your console programs and services.</p>
-          {/* Add dashboard content here */}
+
+          {/* Tabs */}
+          <div className="mb-8">
+            <div className="border-b border-gray-700">
+              <nav className="-mb-px flex space-x-8">
+                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                  <button
+                    onClick={() => handleTabChange('wserver')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'wserver'
+                        ? 'border-blue-500 text-blue-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    WServer
+                  </button>
+                )}
+                <button
+                  onClick={() => handleTabChange('pm2')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'pm2'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
+                  PM2
+                </button>
+                <button
+                  onClick={() => handleTabChange('instance')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'instance'
+                      ? 'border-blue-500 text-blue-400'
+                      : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                  }`}
+                >
+                  Instance
+                </button>
+                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                  <button
+                    onClick={() => handleTabChange('usermanager')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'usermanager'
+                        ? 'border-blue-500 text-blue-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    User Manager
+                  </button>
+                )}
+                {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                  <button
+                    onClick={() => handleTabChange('adminlog')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'adminlog'
+                        ? 'border-blue-500 text-blue-400'
+                        : 'border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300'
+                    }`}
+                  >
+                    Admin Log
+                  </button>
+                )}
+              </nav>
+            </div>
+          </div>
+
+          {/* Tab Content */}
+          <WebSocketProvider user={user}>
+            <div className="tab-content">
+              {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                <div className={activeTab === 'wserver' ? '' : 'hidden'}>
+                  <WServerTab activeTab={activeTab} user={user} />
+                </div>
+              )}
+              <div className={activeTab === 'pm2' ? '' : 'hidden'}>
+                <PM2Tab activeTab={activeTab} user={user} />
+              </div>
+              <div className={activeTab === 'instance' ? '' : 'hidden'}>
+                 <InstanceTab activeTab={activeTab} />
+               </div>
+               {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                 <div className={activeTab === 'usermanager' ? '' : 'hidden'}>
+                   <UserManagerTab activeTab={activeTab} />
+                 </div>
+               )}
+               {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
+                 <div className={activeTab === 'adminlog' ? '' : 'hidden'}>
+                   <AdminLogTab activeTab={activeTab} />
+                 </div>
+               )}
+            </div>
+          </WebSocketProvider>
         </div>
       </main>
 
