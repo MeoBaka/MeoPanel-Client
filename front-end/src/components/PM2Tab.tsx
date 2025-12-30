@@ -1141,7 +1141,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                     <div className="p-3 border-b border-gray-700">
                       <h3 className="text-white font-medium text-sm">EXPLORER</h3>
                     </div>
-                    <div className="flex-1 overflow-auto">
+                    <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800" style={{
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: '#4B5563 #1F2937',
+                      WebkitScrollbarWidth: 'thin',
+                      WebkitScrollbarTrack: 'background: #1F2937',
+                      WebkitScrollbarThumb: 'background: #4B5563'
+                    } as any}>
                       <div className="p-2">
                         {/* Breadcrumb */}
                         <div className="mb-2 text-xs text-gray-400">
@@ -1386,7 +1392,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                     {/* Editor */}
                     {fileBrowserModal.activeTabIndex >= 0 && (
                       <>
-                        <div className="flex-1 overflow-auto">
+                        <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800" style={{
+                          scrollbarWidth: 'thin',
+                          scrollbarColor: '#4B5563 #1F2937',
+                          WebkitScrollbarWidth: 'thin',
+                          WebkitScrollbarTrack: 'background: #1F2937',
+                          WebkitScrollbarThumb: 'background: #4B5563'
+                        } as any}>
                           <div className="flex">
                             {/* Line Numbers */}
                             <div className="bg-gray-800 border-r border-gray-700 px-1 py-1 text-gray-500 text-sm font-mono select-none flex-shrink-0">
