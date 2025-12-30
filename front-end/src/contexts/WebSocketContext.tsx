@@ -13,7 +13,7 @@ interface WServer {
 }
 
 interface WebSocketContextType {
-  connectToServer: (wserver: WServer, onMessage: (event: MessageEvent, serverId: string) => void) => void
+  connectToServer: (wserver: WServer, onMessage: (event: MessageEvent, serverId: string) => void, onOpen?: (ws: WebSocket, wserver: WServer) => void) => void
   sendToServer: (serverId: string, message: any) => void
   disconnectFromServer: (serverId: string) => void
   isConnected: (serverId: string) => boolean
@@ -38,7 +38,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children, 
   const wsRefs = useRef<Record<string, WebSocket>>({})
   const messageHandlers = useRef<Record<string, (event: MessageEvent, serverId: string) => void>>({})
 
-  const connectToServer = useCallback((wserver: WServer, onMessage: (event: MessageEvent, serverId: string) => void) => {
+  const connectToServer = useCallback((wserver: WServer, onMessage: (event: MessageEvent, serverId: string) => void, onOpen?: (ws: WebSocket, wserver: WServer) => void) => {
     // Don't create a new connection if one is already active
     if (wsRefs.current[wserver.id] && wsRefs.current[wserver.id].readyState === WebSocket.OPEN) {
       // Update message handler
@@ -65,6 +65,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children, 
         clientName
       }
       ws.send(JSON.stringify(authMessage))
+      // Call onOpen callback if provided
+      if (onOpen) {
+        onOpen(ws, wserver)
+      }
     }
 
     ws.onmessage = (event) => {

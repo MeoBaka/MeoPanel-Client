@@ -67,7 +67,14 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
    }, [])
    const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
 
-  const handleMessage = useCallback((event: MessageEvent, serverId: string) => {
+   const onOpen = useCallback((ws: WebSocket, wserver: WServer) => {
+     if (activeTab === 'pm2') {
+       sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
+       updateIntervals.current[wserver.id] = setTimeout(() => {}, 0)
+     }
+   }, [activeTab, sendToServer])
+
+   const handleMessage = useCallback((event: MessageEvent, serverId: string) => {
     try {
       const message = event.data
 
@@ -126,13 +133,6 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           ...prev,
           [serverId]: 'online'
         }))
-
-        // If this is the initial connection message and we're on PM2 tab, start realtime updates
-        const wserver = wservers.find(s => s.id === serverId)
-        if (wserver && activeTab === 'pm2' && !updateIntervals.current[serverId]) {
-          sendToServer(serverId, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
-          updateIntervals.current[serverId] = setTimeout(() => {}, 0)
-        }
       }
     } catch (error) {
       console.error('Failed to parse server message:', error)
@@ -152,7 +152,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
     // Connect to WebSocket for each wserver
     wservers.forEach(wserver => {
-      connectToServer(wserver, handleMessage)
+      connectToServer(wserver, handleMessage, onOpen)
     })
 
     return () => {
@@ -165,7 +165,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       Object.values(updateIntervals.current).forEach(clearTimeout)
       updateIntervals.current = {}
     }
-  }, [wservers, activeTab, connectToServer, handleMessage])
+  }, [wservers, activeTab, connectToServer, handleMessage, onOpen])
 
   useEffect(() => {
     // Start or stop realtime updates based on activeTab
@@ -261,19 +261,6 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     })
     return list
   }
-
-  const getAllProcessesInOrder = () => {
-    const all: {serverId: string, process: PM2Process, index: number}[] = []
-    let globalIndex = 0
-    wservers.forEach(wserver => {
-      const processes = pm2Data[wserver.id] || []
-      processes.forEach(process => {
-        all.push({ serverId: wserver.id, process, index: globalIndex++ })
-      })
-    })
-    return all
-  }
-
 
   const handleAction = async (serverId: string, action: string, process: PM2Process) => {
     const wserver = wservers.find(s => s.id === serverId)
