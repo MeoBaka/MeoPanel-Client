@@ -94,6 +94,16 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
         return
       }
 
+      // Check if it's an error response
+      if (parsedMessage.type === 'error') {
+        console.error('Server error:', parsedMessage.message)
+        setConnectionStatuses(prev => ({
+          ...prev,
+          [serverId]: 'offline'
+        }))
+        return
+      }
+
       // Otherwise, treat as server status data
       const data: ServerStatus = parsedMessage
       setServerStatuses(prev => ({

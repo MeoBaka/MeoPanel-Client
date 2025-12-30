@@ -48,6 +48,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
    const [wservers, setWservers] = useState<WServer[]>([])
    const [pm2Data, setPm2Data] = useState<Record<string, PM2Process[]>>({})
    const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connecting' | 'online' | 'offline'>>({})
+   const [pingLatencies, setPingLatencies] = useState<Record<string, number>>({})
    const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
    const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
    const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
@@ -83,13 +84,14 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           ...prev,
           [serverId]: 'online'
         }))
-      } else if (parsedMessage.pong && parsedMessage.status === 'ok') {
-        // Handle ping response - connection is healthy
-        setConnectionStatuses(prev => ({
-          ...prev,
-          [serverId]: 'online'
-        }))
-        return
+        // Calculate latency from pm2-list response
+        if (parsedMessage.timestamp) {
+          const latency = Date.now() - parsedMessage.timestamp
+          setPingLatencies(prev => ({
+            ...prev,
+            [serverId]: latency
+          }))
+        }
       } else if (parsedMessage.type === 'error') {
         console.error('Server error:', parsedMessage.message);
         alert(`Error: ${parsedMessage.message}`);
@@ -162,19 +164,21 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           // Start update interval if not already running
           if (!updateIntervals.current[wserver.id]) {
             // Send immediately on start
-            sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' })
+            sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
             updateIntervals.current[wserver.id] = setInterval(() => {
               if (isConnected(wserver.id)) {
-                sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' })
+                sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
               }
             }, 900) // Request pm2-list every 900ms
           }
+          // Ping is handled by pm2-list responses
         } else {
           // Stop intervals when not active
           if (updateIntervals.current[wserver.id]) {
             clearInterval(updateIntervals.current[wserver.id])
             delete updateIntervals.current[wserver.id]
           }
+          // No ping intervals to clean up
         }
       }
     })
@@ -185,7 +189,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     if (activeTab === 'pm2') {
       wservers.forEach(wserver => {
         if (isConnected(wserver.id)) {
-          sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list' })
+          sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
           sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' })
         }
       })
@@ -367,6 +371,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       }, 1000)
     }
   }
+
 
 
   const handleSelectAll = (serverId: string, checked: boolean) => {
@@ -566,6 +571,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                 <span>Run: {stats.running}</span>
                 <span>Stop: {stats.stopped}</span>
                 <span>Error: {stats.error}</span>
+                <span>Ping: {pingLatencies[wserver.id] ? `${pingLatencies[wserver.id]}ms` : 'N/A'}</span>
                 <button
                   onClick={() => handleGlobalAction(wserver.id, 'save')}
                   className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
