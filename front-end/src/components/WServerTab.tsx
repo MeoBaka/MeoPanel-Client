@@ -71,7 +71,13 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
    })
    const [loading, setLoading] = useState(false)
    const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
-   const pingIntervals = useRef<Record<string, NodeJS.Timeout>>({})
+    const pingIntervals = useRef<Record<string, NodeJS.Timeout>>({})
+
+    const onOpen = useCallback((ws: WebSocket, wserver: WServer) => {
+      if (activeTab === 'wserver') {
+        sendToServer(wserver.id, { command: 'status', uuid: wserver.uuid, token: wserver.token })
+      }
+    }, [activeTab, sendToServer])
 
   useEffect(() => {
     fetchWservers()
@@ -129,12 +135,9 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
   useEffect(() => {
     if (activeTab !== 'wserver') return;
 
-    // Connect to WebSocket for each wserver with onOpen callback
+    // Connect to WebSocket for each wserver
     wservers.forEach(wserver => {
-      connectToServer(wserver, handleMessage, (ws, connectedWserver) => {
-        // Send status command only when connection is fully established (exact PM2 pattern)
-        sendToServer(connectedWserver.id, { command: 'status', uuid: connectedWserver.uuid, token: connectedWserver.token })
-      })
+      connectToServer(wserver, handleMessage, onOpen)
     })
 
     return () => {
@@ -151,7 +154,7 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
         }
       })
     }
-  }, [wservers, activeTab, connectToServer, handleMessage, sendToServer])
+  }, [wservers, activeTab, connectToServer, handleMessage, onOpen])
 
   useEffect(() => {
     // Start or stop ping intervals based on activeTab
@@ -171,6 +174,28 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
           if (pingIntervals.current[wserver.id]) {
             clearInterval(pingIntervals.current[wserver.id])
             delete pingIntervals.current[wserver.id]
+          }
+        }
+      }
+    })
+  }, [activeTab, wservers, isConnected, sendToServer])
+
+  useEffect(() => {
+    // Start or stop status updates based on activeTab
+    wservers.forEach(wserver => {
+      if (isConnected(wserver.id)) {
+        if (activeTab === 'wserver') {
+          // Send status command if not already running
+          if (!updateIntervals.current[wserver.id]) {
+            sendToServer(wserver.id, { command: 'status', uuid: wserver.uuid, token: wserver.token })
+            updateIntervals.current[wserver.id] = setTimeout(() => {}, 0) // Placeholder to mark as started
+          }
+        } else {
+          // Stop status updates when not active
+          if (updateIntervals.current[wserver.id]) {
+            sendToServer(wserver.id, { command: 'status-stop' })
+            clearTimeout(updateIntervals.current[wserver.id])
+            delete updateIntervals.current[wserver.id]
           }
         }
       }
