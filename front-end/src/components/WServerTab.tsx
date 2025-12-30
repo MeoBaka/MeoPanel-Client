@@ -315,7 +315,7 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
                      connectionStatus === 'online' ? 'Online' : 'Offline'}
                   </p>
                 </div>
-                {status && (
+                {status && status.memory && (
                   <>
                     <div>
                       <span className="text-gray-400">Memory:</span>
