@@ -28,9 +28,11 @@ interface PM2Process {
     status: string
     restart_time: number
     pm_uptime: number
+    pm_cwd: string
   }
   note?: string
 }
+
 
 interface User {
   id: string
@@ -53,18 +55,117 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
    const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
    const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
    const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
+   const [fileBrowserModal, setFileBrowserModal] = useState<{serverId: string, process: PM2Process, currentPath: string, files: any[], openFiles: {file: any, content: string, path: string, originalContent: string, modified: boolean}[], activeTabIndex: number, sidebarWidth: number, wordWrap: boolean, sidebarVisible: boolean} | null>(null)
+   const [saveToast, setSaveToast] = useState<string | null>(null)
    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
    const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
    const terminalRef = useRef<HTMLDivElement>(null)
    const logsContainerRef = useRef<HTMLDivElement>(null)
    const logsListenerRef = useRef<((event: MessageEvent, serverId: string) => void) | null>(null)
+   const [isResizing, setIsResizing] = useState(false)
+   const [startX, setStartX] = useState(0)
+   const [startWidth, setStartWidth] = useState(256)
 
    useEffect(() => {
      const handleClickOutside = () => setContextMenu(null)
      document.addEventListener('click', handleClickOutside)
      return () => document.removeEventListener('click', handleClickOutside)
    }, [])
+
+   // Prevent body scrolling when file browser modal is open
+   useEffect(() => {
+     if (fileBrowserModal) {
+       document.body.style.overflow = 'hidden'
+     } else {
+       document.body.style.overflow = ''
+     }
+     return () => {
+       document.body.style.overflow = ''
+     }
+   }, [fileBrowserModal])
+
+   useEffect(() => {
+     const handleMouseMove = (e: MouseEvent) => {
+       if (isResizing && fileBrowserModal) {
+         const newWidth = Math.max(200, Math.min(600, startWidth + (e.clientX - startX)))
+         setFileBrowserModal(prev => prev ? { ...prev, sidebarWidth: newWidth } : null)
+       }
+     }
+     const handleMouseUp = () => {
+       setIsResizing(false)
+     }
+     if (isResizing) {
+       document.addEventListener('mousemove', handleMouseMove)
+       document.addEventListener('mouseup', handleMouseUp)
+     }
+     return () => {
+       document.removeEventListener('mousemove', handleMouseMove)
+       document.removeEventListener('mouseup', handleMouseUp)
+     }
+   }, [isResizing, startX, startWidth, fileBrowserModal])
+
+   useEffect(() => {
+     const handleKeyDown = (e: KeyboardEvent) => {
+       if (fileBrowserModal && e.ctrlKey) {
+         switch (e.key) {
+           case 's':
+             e.preventDefault()
+             if (fileBrowserModal.activeTabIndex >= 0) {
+               const activeFile = fileBrowserModal.openFiles[fileBrowserModal.activeTabIndex]
+               const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
+               if (wserver && isConnected(fileBrowserModal.serverId)) {
+                 sendToServer(fileBrowserModal.serverId, {
+                   command: 'pm2-write-file',
+                   id: fileBrowserModal.process.pm_id,
+                   relativePath: activeFile.path,
+                   content: activeFile.content,
+                   uuid: wserver.uuid,
+                   token: wserver.token
+                 });
+                 // Show notification immediately
+                 setSaveToast('File saved successfully')
+                 setTimeout(() => setSaveToast(null), 3000)
+                 // Update local state
+                 setFileBrowserModal(prev => {
+                   if (!prev || prev.activeTabIndex < 0) return prev
+                   const newOpenFiles = [...prev.openFiles]
+                   newOpenFiles[prev.activeTabIndex].originalContent = newOpenFiles[prev.activeTabIndex].content
+                   newOpenFiles[prev.activeTabIndex].modified = false
+                   return { ...prev, openFiles: newOpenFiles }
+                 })
+               }
+             }
+             break
+           case 'a':
+             e.preventDefault()
+             const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+             if (textarea) {
+               textarea.select()
+             }
+             break
+           case 'x':
+             e.preventDefault()
+             document.execCommand('cut')
+             break
+           case 'c':
+             e.preventDefault()
+             document.execCommand('copy')
+             break
+           case 'v':
+             e.preventDefault()
+             document.execCommand('paste')
+             break
+         }
+       }
+     }
+     if (fileBrowserModal) {
+       document.addEventListener('keydown', handleKeyDown)
+     }
+     return () => {
+       document.removeEventListener('keydown', handleKeyDown)
+     }
+   }, [fileBrowserModal, wservers, isConnected, sendToServer])
    const updateIntervals = useRef<Record<string, NodeJS.Timeout>>({})
 
    const onOpen = useCallback((ws: WebSocket, wserver: WServer) => {
@@ -74,6 +175,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
      }
    }, [activeTab, sendToServer])
 
+ 
    const handleMessage = useCallback((event: MessageEvent, serverId: string) => {
     try {
       const message = event.data
@@ -127,6 +229,22 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
             return { ...prev, logs: [...prev.logs, ...parsedMessage.data] }
           }
         })
+      } else if (parsedMessage.type === 'pm2-list-files') {
+        setFileBrowserModal(prev => prev ? { ...prev, files: parsedMessage.data } : null)
+      } else if (parsedMessage.type === 'pm2-read-file') {
+        setFileBrowserModal(prev => {
+          if (!prev || prev.activeTabIndex < 0) return prev
+          const newOpenFiles = [...prev.openFiles]
+          newOpenFiles[prev.activeTabIndex].content = parsedMessage.data
+          newOpenFiles[prev.activeTabIndex].originalContent = parsedMessage.data
+          newOpenFiles[prev.activeTabIndex].modified = false
+          return { ...prev, openFiles: newOpenFiles }
+        })
+      } else if (parsedMessage.type === 'pm2-write-file') {
+        setSaveToast('File saved successfully')
+        setTimeout(() => {
+          setSaveToast(null)
+        }, 3000)
       } else {
         // Other messages
         setConnectionStatuses(prev => ({
@@ -452,6 +570,31 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     }
   }
 
+  const openFileBrowserModal = async (serverId: string, process: PM2Process) => {
+    const wserver = wservers.find(s => s.id === serverId)
+    if (isConnected(serverId) && wserver) {
+      setFileBrowserModal({
+        serverId,
+        process,
+        currentPath: '',
+        files: [],
+        openFiles: [],
+        activeTabIndex: -1,
+        sidebarWidth: 256,
+        wordWrap: true,
+        sidebarVisible: true
+      })
+      // Request files
+      sendToServer(serverId, {
+        command: 'pm2-list-files',
+        id: process.pm_id,
+        relativePath: '',
+        uuid: wserver.uuid,
+        token: wserver.token
+      })
+    }
+  }
+
   const sendCommand = (serverId: string, process: PM2Process, command: string) => {
     const wserver = wservers.find(s => s.id === serverId)
     if (isConnected(serverId) && wserver && command.trim()) {
@@ -744,6 +887,15 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         <p className="text-gray-400 text-center py-8">No servers configured. Add servers in the WServer tab.</p>
       )}
 
+      {saveToast && (
+        <div
+          className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-green-600 text-white px-6 py-3 rounded shadow-lg text-center"
+          style={{ zIndex: 10000 }}
+        >
+          {saveToast}
+        </div>
+      )}
+
       {contextMenu && (
         <div
           className="fixed z-50 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1"
@@ -789,6 +941,15 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
             className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
           >
             View Logs
+          </button>
+          <button
+            onClick={() => {
+              openFileBrowserModal(contextMenu.serverId, contextMenu.process)
+              setContextMenu(null)
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+          >
+            View File
           </button>
           <button
             onClick={() => {
@@ -925,7 +1086,396 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                 Send
               </button>
             </div>
+
           </div>
+        </div>
+      )}
+
+      {fileBrowserModal && (
+        <div className="fixed inset-0 z-50 bg-gray-900 overflow-hidden">
+          <div className="h-full flex flex-col">
+            {/* Header */}
+            <div className="bg-gray-800 border-b border-gray-700 px-4 py-1 flex justify-between items-center">
+              <div className="flex items-center">
+                <span className="text-gray-400 mr-2">📁</span>
+                <span className="text-white font-medium">{fileBrowserModal.process.name}</span>
+                <span className="text-gray-400 mx-2">-</span>
+                <span className="text-gray-300 text-sm">{fileBrowserModal.process.pm2_env.pm_cwd}{fileBrowserModal.currentPath}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                    if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                      sendToServer(fileBrowserModal!.serverId, {
+                        command: 'pm2-list-files',
+                        id: fileBrowserModal!.process.pm_id,
+                        relativePath: fileBrowserModal!.currentPath,
+                        uuid: wserver.uuid,
+                        token: wserver.token
+                      });
+                    }
+                  }}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Refresh"
+                >
+                  🔄
+                </button>
+                <button
+                  onClick={() => setFileBrowserModal(null)}
+                  className="text-gray-400 hover:text-white p-1"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+
+            {/* Main Content */}
+            <div className="flex-1 flex overflow-hidden">
+              {fileBrowserModal.sidebarVisible && (
+                <>
+                  {/* Sidebar - File Explorer */}
+                  <div className="bg-gray-800 border-r border-gray-700 flex flex-col" style={{ width: fileBrowserModal.sidebarWidth }}>
+                    <div className="p-3 border-b border-gray-700">
+                      <h3 className="text-white font-medium text-sm">EXPLORER</h3>
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                      <div className="p-2">
+                        {/* Breadcrumb */}
+                        <div className="mb-2 text-xs text-gray-400">
+                          {fileBrowserModal.currentPath ? (
+                            <div className="flex items-center">
+                              <button
+                                onClick={() => {
+                                  const newPath = fileBrowserModal!.currentPath.split('/').slice(0, -1).join('/') || ''
+                                  setFileBrowserModal(prev => prev ? { ...prev, currentPath: newPath } : null)
+                                  const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                  if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                    sendToServer(fileBrowserModal!.serverId, {
+                                      command: 'pm2-list-files',
+                                      id: fileBrowserModal!.process.pm_id,
+                                      relativePath: newPath,
+                                      uuid: wserver.uuid,
+                                      token: wserver.token
+                                    });
+                                  }
+                                }}
+                                className="text-blue-400 hover:text-blue-300 mr-2 px-2 py-1 rounded hover:bg-gray-700 flex items-center"
+                                title="Go back"
+                              >
+                              ← ..
+                            </button>
+                              <span>/</span>
+                              {fileBrowserModal.currentPath.split('/').map((part, index) => (
+                                <span key={index}>
+                                  {index > 0 && '/'}
+                                  <span className="text-gray-300">{part}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span>Root</span>
+                          )}
+                        </div>
+
+                        {/* Files List */}
+                        <div className="space-y-1">
+                          {fileBrowserModal.files.map((file: any, index: number) => (
+                            <div
+                              key={index}
+                              onClick={() => {
+                                if (file.isDirectory) {
+                                  const newPath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${file.name}` : file.name
+                                  setFileBrowserModal(prev => prev ? { ...prev, currentPath: newPath } : null)
+                                  const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                  if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                    sendToServer(fileBrowserModal!.serverId, {
+                                      command: 'pm2-list-files',
+                                      id: fileBrowserModal!.process.pm_id,
+                                      relativePath: newPath,
+                                      uuid: wserver.uuid,
+                                      token: wserver.token
+                                    });
+                                  }
+                                } else {
+                                  const filePath = fileBrowserModal!.currentPath ? `${fileBrowserModal!.currentPath}/${file.name}` : file.name
+                                  setFileBrowserModal(prev => {
+                                    if (!prev) return null
+                                    const existingIndex = prev.openFiles.findIndex(f => f.path === filePath)
+                                    if (existingIndex >= 0) {
+                                      return { ...prev, activeTabIndex: existingIndex }
+                                    } else {
+                                      const newOpenFiles = [...prev.openFiles, { file, content: '', path: filePath, originalContent: '', modified: false }]
+                                      return { ...prev, openFiles: newOpenFiles, activeTabIndex: newOpenFiles.length - 1 }
+                                    }
+                                  })
+                                  const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                  if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                    sendToServer(fileBrowserModal!.serverId, {
+                                      command: 'pm2-read-file',
+                                      id: fileBrowserModal!.process.pm_id,
+                                      relativePath: filePath,
+                                      uuid: wserver.uuid,
+                                      token: wserver.token
+                                    });
+                                  }
+                                }
+                              }}
+                              className={`flex items-center p-1 rounded cursor-pointer hover:bg-gray-700 text-sm ${
+                                file.isDirectory ? 'text-blue-400' : 'text-gray-300'
+                              }`}
+                            >
+                              <span className="mr-2">{file.isDirectory ? '📁' : '📄'}</span>
+                              <span className="truncate">{file.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resizer */}
+                  <div
+                    className="w-1 bg-gray-700 cursor-col-resize hover:bg-gray-600"
+                    onMouseDown={(e) => {
+                      setIsResizing(true)
+                      setStartX(e.clientX)
+                      setStartWidth(fileBrowserModal!.sidebarWidth)
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Editor Area */}
+              <div className="flex-1 flex flex-col bg-gray-900" >
+                {fileBrowserModal.openFiles.length > 0 ? (
+                  <>
+                    {/* File Tabs */}
+                    <div className="bg-gray-800 border-b border-gray-700 flex">
+                      {fileBrowserModal.openFiles.map((openFile, index) => (
+                        <div
+                          key={index}
+                          className={`flex items-center px-3 py-2 border-r border-gray-700 cursor-pointer hover:bg-gray-700 ${
+                            index === fileBrowserModal.activeTabIndex ? 'bg-gray-700' : ''
+                          }`}
+                          onClick={() => setFileBrowserModal(prev => prev ? { ...prev, activeTabIndex: index } : null)}
+                        >
+                          <span className="text-gray-300 text-sm mr-2">{openFile.file.name}</span>
+                          <div className="flex items-center ml-1">
+                            {openFile.modified && <div className="w-2 h-2 bg-blue-500 rounded-full mr-1"></div>}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setFileBrowserModal(prev => {
+                                  if (!prev) return null
+                                  const newOpenFiles = prev.openFiles.filter((_, i) => i !== index)
+                                  let newActiveIndex = prev.activeTabIndex
+                                  if (index === prev.activeTabIndex) {
+                                    newActiveIndex = Math.max(0, index - 1)
+                                  } else if (index < prev.activeTabIndex) {
+                                    newActiveIndex = prev.activeTabIndex - 1
+                                  }
+                                  if (newOpenFiles.length === 0) newActiveIndex = -1
+                                  return { ...prev, openFiles: newOpenFiles, activeTabIndex: newActiveIndex }
+                                })
+                              }}
+                              className="text-gray-500 hover:text-gray-300"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Editor Toolbar */}
+                    <div className="bg-gray-800 border-b border-gray-700 px-4 py-0.5 flex items-center space-x-2">
+                      <button
+                        onClick={() => {
+                          const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+                          if (textarea) {
+                            document.execCommand('undo')
+                          }
+                        }}
+                        className="px-2 py-1 text-gray-300 hover:text-white hover:bg-gray-700 rounded text-sm"
+                        title="Undo (Ctrl+Z)"
+                      >
+                        ↶
+                      </button>
+                      <button
+                        onClick={() => {
+                          const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+                          if (textarea) {
+                            document.execCommand('redo')
+                          }
+                        }}
+                        className="px-2 py-1 text-gray-300 hover:text-white hover:bg-gray-700 rounded text-sm"
+                        title="Redo (Ctrl+Y)"
+                      >
+                        ↷
+                      </button>
+                      <div className="w-px h-4 bg-gray-600"></div>
+                      <button
+                        onClick={() => {
+                          const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+                          if (textarea) {
+                            document.execCommand('cut')
+                          }
+                        }}
+                        className="px-2 py-1 text-gray-300 hover:text-white hover:bg-gray-700 rounded text-sm"
+                        title="Cut (Ctrl+X)"
+                      >
+                        ✂
+                      </button>
+                      <button
+                        onClick={() => {
+                          const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+                          if (textarea) {
+                            document.execCommand('copy')
+                          }
+                        }}
+                        className="px-2 py-1 text-gray-300 hover:text-white hover:bg-gray-700 rounded text-sm"
+                        title="Copy (Ctrl+C)"
+                      >
+                        📋
+                      </button>
+                      <button
+                        onClick={() => {
+                          const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+                          if (textarea) {
+                            document.execCommand('paste')
+                          }
+                        }}
+                        className="px-2 py-1 text-gray-300 hover:text-white hover:bg-gray-700 rounded text-sm"
+                        title="Paste (Ctrl+V)"
+                      >
+                        📄
+                      </button>
+                      <button
+                        onClick={() => {
+                          const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+                          if (textarea) {
+                            textarea.select()
+                          }
+                        }}
+                        className="px-2 py-1 text-gray-300 hover:text-white hover:bg-gray-700 rounded text-sm"
+                        title="Select All (Ctrl+A)"
+                      >
+                        ☑
+                      </button>
+                      <div className="w-px h-4 bg-gray-600"></div>
+                      <button
+                        onClick={() => setFileBrowserModal(prev => prev ? { ...prev, wordWrap: !prev.wordWrap } : null)}
+                        className={`px-2 py-1 text-sm rounded ${fileBrowserModal.wordWrap ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white hover:bg-gray-700'}`}
+                        title="Toggle Word Wrap"
+                      >
+                        ⤶
+                      </button>
+                      <div className="w-px h-4 bg-gray-600"></div>
+                      <button
+                        onClick={() => setFileBrowserModal(prev => prev ? { ...prev, sidebarVisible: !prev.sidebarVisible } : null)}
+                        className="px-2 py-1 text-gray-300 hover:text-white hover:bg-gray-700 rounded text-sm"
+                        title="Toggle Sidebar"
+                      >
+                        📂
+                      </button>
+                    </div>
+
+                    {/* Editor */}
+                    {fileBrowserModal.activeTabIndex >= 0 && (
+                      <>
+                        <div className="flex-1 overflow-auto">
+                          <div className="flex">
+                            {/* Line Numbers */}
+                            <div className="bg-gray-800 border-r border-gray-700 px-1 py-1 text-gray-500 text-sm font-mono select-none flex-shrink-0">
+                              {fileBrowserModal.openFiles[fileBrowserModal.activeTabIndex].content.split('\n').map((_, index) => (
+                                <div key={index} className="leading-6 h-6">
+                                  {index + 1}
+                                </div>
+                              ))}
+                            </div>
+                            {/* Textarea */}
+                            <textarea
+                              value={fileBrowserModal.openFiles[fileBrowserModal.activeTabIndex].content}
+                              onChange={(e) => setFileBrowserModal(prev => {
+                                if (!prev || prev.activeTabIndex < 0) return prev
+                                const newOpenFiles = [...prev.openFiles]
+                                newOpenFiles[prev.activeTabIndex].content = e.target.value
+                                newOpenFiles[prev.activeTabIndex].modified = e.target.value !== newOpenFiles[prev.activeTabIndex].originalContent
+                                return { ...prev, openFiles: newOpenFiles }
+                              })}
+                              className="flex-1 bg-gray-800 text-gray-100 border-0 p-1 font-mono text-sm resize-none focus:outline-none"
+                              placeholder="Loading file content..."
+                              spellCheck={false}
+                              style={{ lineHeight: '1.5rem', whiteSpace: fileBrowserModal.wordWrap ? 'pre-wrap' : 'pre' }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Footer with Save Button */}
+                        <div className="bg-gray-800 border-t border-gray-700 px-4 py-1 flex justify-between items-center flex-shrink-0">
+                          <div className="text-gray-400 text-xs">
+                            {fileBrowserModal.openFiles[fileBrowserModal.activeTabIndex].content.length} characters •
+                            {fileBrowserModal.openFiles[fileBrowserModal.activeTabIndex].file.name}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                const activeFile = fileBrowserModal!.openFiles[fileBrowserModal!.activeTabIndex]
+                                const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                  sendToServer(fileBrowserModal!.serverId, {
+                                    command: 'pm2-write-file',
+                                    id: fileBrowserModal!.process.pm_id,
+                                    relativePath: activeFile.path,
+                                    content: activeFile.content,
+                                    uuid: wserver.uuid,
+                                    token: wserver.token
+                                  });
+                                  // Show notification immediately
+                                  setSaveToast('File saved successfully')
+                                  setTimeout(() => setSaveToast(null), 3000)
+                                  // Update local state
+                                  setFileBrowserModal(prev => {
+                                    if (!prev || prev.activeTabIndex < 0) return prev
+                                    const newOpenFiles = [...prev.openFiles]
+                                    newOpenFiles[prev.activeTabIndex].originalContent = newOpenFiles[prev.activeTabIndex].content
+                                    newOpenFiles[prev.activeTabIndex].modified = false
+                                    return { ...prev, openFiles: newOpenFiles }
+                                  })
+                                }
+                              }}
+                              className="px-4 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                      <div className="text-4xl mb-4">📄</div>
+                      <div>Select a file from the explorer to view its contents</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveToast && (
+        <div
+          className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-green-600 text-white px-6 py-3 rounded shadow-lg text-center"
+          style={{ zIndex: 10000 }}
+        >
+          {saveToast}
         </div>
       )}
     </div>
