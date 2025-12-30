@@ -29,6 +29,7 @@ interface PM2Process {
     restart_time: number
     pm_uptime: number
   }
+  note?: string
 }
 
 interface User {
@@ -54,7 +55,6 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
    const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-   const [notes, setNotes] = useState<Record<string, Record<string, string>>>({})
    const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
    const terminalRef = useRef<HTMLDivElement>(null)
    const logsContainerRef = useRef<HTMLDivElement>(null)
@@ -95,11 +95,6 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       } else if (parsedMessage.type === 'error') {
         console.error('Server error:', parsedMessage.message);
         alert(`Error: ${parsedMessage.message}`);
-      } else if (parsedMessage.type === 'pm2-notes-get') {
-        setNotes(prev => ({
-          ...prev,
-          [serverId]: parsedMessage.data || {}
-        }))
       } else if (parsedMessage.type === 'pm2-send') {
         console.log('Data sent to process successfully');
         setNotification({ message: 'Data sent to process successfully', type: 'success' })
@@ -196,16 +191,6 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     })
   }, [activeTab, wservers, isConnected, sendToServer])
 
-  useEffect(() => {
-    // Load notes when activeTab becomes 'pm2'
-    if (activeTab === 'pm2') {
-      wservers.forEach(wserver => {
-        if (isConnected(wserver.id)) {
-          sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-notes-get' })
-        }
-      })
-    }
-  }, [activeTab, wservers, isConnected, sendToServer])
 
   useEffect(() => {
     if (autoScrollEnabled && logsContainerRef.current && logsModal) {
@@ -680,15 +665,12 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                       <td className="w-32 px-4 py-2 text-white">
                         <input
                           type="text"
-                          value={notes[wserver.id]?.[process.name] || ''}
+                          value={process.note || ''}
                           onChange={(e) => {
                             const newNote = e.target.value;
-                            setNotes(prev => ({
+                            setPm2Data(prev => ({
                               ...prev,
-                              [wserver.id]: {
-                                ...prev[wserver.id],
-                                [process.name]: newNote
-                              }
+                              [wserver.id]: prev[wserver.id].map(p => p.name === process.name ? { ...p, note: newNote } : p)
                             }));
                           }}
                           onBlur={() => {
@@ -698,7 +680,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                                 uuid: wserver.uuid,
                                 token: wserver.token,
                                 process_name: process.name,
-                                note: notes[wserver.id]?.[process.name] || ''
+                                note: process.note || ''
                               });
                             }
                           }}
