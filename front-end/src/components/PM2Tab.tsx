@@ -41,6 +41,14 @@ interface User {
   role: string
 }
 
+interface PM2Permission {
+  id: string
+  userId: string
+  wserverId: string
+  pm2ProcessName: string
+  permissions: string[]
+}
+
 interface PM2TabProps {
   activeTab: string
   user: User | null
@@ -66,6 +74,8 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
    const [isResizing, setIsResizing] = useState(false)
    const [startX, setStartX] = useState(0)
    const [startWidth, setStartWidth] = useState(256)
+   const [userPermissions, setUserPermissions] = useState<PM2Permission[]>([])
+   const [permissionsLoading, setPermissionsLoading] = useState(true)
 
    useEffect(() => {
      const handleClickOutside = () => setContextMenu(null)
@@ -273,6 +283,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
   useEffect(() => {
     fetchWservers()
+    fetchUserPermissions()
   }, [])
 
   useEffect(() => {
@@ -334,6 +345,17 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
   }, [notification])
 
   const fetchWservers = async () => {
+    // Always include local server for PM2 management
+    const localServer = {
+      id: 'local',
+      servername: 'Local Server',
+      url: 'ws://localhost:5000', // WebSocket URL for local server
+      uuid: 'local-server',
+      token: 'local-token', // This will be validated by the server
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+
     try {
       const token = localStorage.getItem('accessToken')
       const response = await fetch('http://localhost:5000/wservers', {
@@ -342,11 +364,41 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         }
       })
       if (response.ok) {
-        const data = await response.json()
-        setWservers(data.data || [])
+        const responseData = await response.json()
+        const remoteServers = responseData.data || []
+        setWservers([localServer, ...remoteServers])
+      } else {
+        // If not authorized or other error, still provide local server
+        console.log('Not authorized to fetch wservers, using local server only')
+        setWservers([localServer])
       }
     } catch (error) {
       console.error('Failed to fetch wservers:', error)
+      // If fetching fails, still provide local server
+      setWservers([localServer])
+    }
+  }
+
+  const fetchUserPermissions = async () => {
+    if (!user) {
+      setPermissionsLoading(false)
+      return
+    }
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch(`http://localhost:5000/pm2-permissions/user/${user.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setUserPermissions(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch user permissions:', error)
+    } finally {
+      setPermissionsLoading(false)
     }
   }
 
@@ -373,6 +425,19 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     const stopped = processes.filter(p => p.pm2_env.status === 'stopped').length
     const error = processes.filter(p => p.pm2_env.status === 'errored').length
     return { total, running, stopped, error }
+  }
+
+  const hasPermission = (serverId: string, processName: string, permission: string): boolean => {
+    // Admins and owners have all permissions
+    if (user && (user.role === 'ADMIN' || user.role === 'OWNER')) {
+      return true
+    }
+
+    // Check user permissions
+    const permissionRecord = userPermissions.find(
+      p => p.wserverId === serverId && p.pm2ProcessName === processName
+    )
+    return permissionRecord ? permissionRecord.permissions.includes(permission) : false
   }
 
   const getTotalSelected = () => {
@@ -849,7 +914,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       )}
 
       {wservers.map((wserver) => {
-        const processes = pm2Data[wserver.id] || []
+        const allProcesses = pm2Data[wserver.id] || []
+        // Filter processes based on view permission
+        const processes = user && (user.role === 'ADMIN' || user.role === 'OWNER')
+          ? allProcesses
+          : permissionsLoading
+            ? [] // Show no processes while permissions are loading
+            : allProcesses.filter(process => hasPermission(wserver.id, process.name, 'view'))
         const connectionStatus = connectionStatuses[wserver.id] || 'connecting'
         const stats = getServerStats(processes)
         const isCollapsed = collapsedServers[wserver.id] || false
@@ -881,18 +952,22 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                 <span>Stop: {stats.stopped}</span>
                 <span>Error: {stats.error}</span>
                 <span>Ping: {pingLatencies[wserver.id] ? `${pingLatencies[wserver.id]}ms` : 'N/A'}</span>
-                <button
-                  onClick={() => handleGlobalAction(wserver.id, 'save')}
-                  className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => handleGlobalAction(wserver.id, 'resurrect')}
-                  className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
-                >
-                  Resurrect
-                </button>
+                {processes.some(p => hasPermission(wserver.id, p.name, 'save_resurrect')) && (
+                  <>
+                    <button
+                      onClick={() => handleGlobalAction(wserver.id, 'save')}
+                      className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => handleGlobalAction(wserver.id, 'resurrect')}
+                      className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
+                    >
+                      Resurrect
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -976,39 +1051,45 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                       <td className="w-20 px-4 py-2 text-white">{process.pm2_env.status === 'online' ? formatUptime(Date.now() - process.pm2_env.pm_uptime) : 'N/A'}</td>
                       <td className="w-12 px-4 py-2 text-white">{process.pm2_env.restart_time}</td>
                       <td className="w-32 px-4 py-2 text-white">
-                        <input
-                          type="text"
-                          value={process.note || ''}
-                          onChange={(e) => {
-                            const newNote = e.target.value;
-                            setPm2Data(prev => ({
-                              ...prev,
-                              [wserver.id]: prev[wserver.id].map(p => p.name === process.name ? { ...p, note: newNote } : p)
-                            }));
-                          }}
-                          onBlur={() => {
-                            if (isConnected(wserver.id)) {
-                              sendToServer(wserver.id, {
-                                command: 'pm2-notes-set',
-                                uuid: wserver.uuid,
-                                token: wserver.token,
-                                process_name: process.name,
-                                note: process.note || ''
-                              });
-                            }
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onMouseUp={(e) => e.stopPropagation()}
-                          className="bg-gray-700 text-white text-xs rounded px-1 py-1 w-full"
-                          placeholder="Add note..."
-                        />
+                        {hasPermission(wserver.id, process.name, 'edit_note') ? (
+                          <input
+                            type="text"
+                            value={process.note || ''}
+                            onChange={(e) => {
+                              const newNote = e.target.value;
+                              setPm2Data(prev => ({
+                                ...prev,
+                                [wserver.id]: prev[wserver.id].map(p => p.name === process.name ? { ...p, note: newNote } : p)
+                              }));
+                            }}
+                            onBlur={() => {
+                              if (isConnected(wserver.id)) {
+                                sendToServer(wserver.id, {
+                                  command: 'pm2-notes-set',
+                                  uuid: wserver.uuid,
+                                  token: wserver.token,
+                                  process_name: process.name,
+                                  note: process.note || ''
+                                });
+                              }
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onMouseUp={(e) => e.stopPropagation()}
+                            className="bg-gray-700 text-white text-xs rounded px-1 py-1 w-full"
+                            placeholder="Add note..."
+                          />
+                        ) : (
+                          <span className="text-xs">{process.note || 'N/A'}</span>
+                        )}
                       </td>
                     </tr>
                   ))}
                   {processes.length === 0 && (
                     <tr>
                       <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
-                        No PM2 processes found or connecting...
+                        {permissionsLoading && user && user.role !== 'ADMIN' && user.role !== 'OWNER'
+                          ? 'Loading permissions...'
+                          : 'No PM2 processes found or connecting...'}
                       </td>
                     </tr>
                   )}
@@ -1086,35 +1167,41 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         >
           {contextMenu.process.pm2_env.status === 'online' ? (
             <>
-              <button
-                onClick={() => {
-                  handleAction(contextMenu.serverId, 'restart', contextMenu.process)
-                  setContextMenu(null)
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
-              >
-                Restart
-              </button>
-              <button
-                onClick={() => {
-                  handleAction(contextMenu.serverId, 'stop', contextMenu.process)
-                  setContextMenu(null)
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
-              >
-                Stop
-              </button>
+              {hasPermission(contextMenu.serverId, contextMenu.process.name, 'control') && (
+                <>
+                  <button
+                    onClick={() => {
+                      handleAction(contextMenu.serverId, 'restart', contextMenu.process)
+                      setContextMenu(null)
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+                  >
+                    Restart
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleAction(contextMenu.serverId, 'stop', contextMenu.process)
+                      setContextMenu(null)
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+                  >
+                    Stop
+                  </button>
+                </>
+              )}
             </>
           ) : (
-            <button
-              onClick={() => {
-                handleAction(contextMenu.serverId, 'start', contextMenu.process)
-                setContextMenu(null)
-              }}
-              className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
-            >
-              Start
-            </button>
+            hasPermission(contextMenu.serverId, contextMenu.process.name, 'control') && (
+              <button
+                onClick={() => {
+                  handleAction(contextMenu.serverId, 'start', contextMenu.process)
+                  setContextMenu(null)
+                }}
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+              >
+                Start
+              </button>
+            )
           )}
           <button
             onClick={() => {
@@ -1125,24 +1212,28 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           >
             View Logs
           </button>
-          <button
-            onClick={() => {
-              openFileBrowserModal(contextMenu.serverId, contextMenu.process)
-              setContextMenu(null)
-            }}
-            className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
-          >
-            View File
-          </button>
-          <button
-            onClick={() => {
-              handleAction(contextMenu.serverId, 'delete', contextMenu.process)
-              setContextMenu(null)
-            }}
-            className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
-          >
-            Delete
-          </button>
+          {hasPermission(contextMenu.serverId, contextMenu.process.name, 'control_file') && (
+            <button
+              onClick={() => {
+                openFileBrowserModal(contextMenu.serverId, contextMenu.process)
+                setContextMenu(null)
+              }}
+              className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+            >
+              View File
+            </button>
+          )}
+          {hasPermission(contextMenu.serverId, contextMenu.process.name, 'control') && (
+            <button
+              onClick={() => {
+                handleAction(contextMenu.serverId, 'delete', contextMenu.process)
+                setContextMenu(null)
+              }}
+              className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
+            >
+              Delete
+            </button>
+          )}
         </div>
       )}
 

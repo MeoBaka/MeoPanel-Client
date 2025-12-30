@@ -15,6 +15,7 @@ const ws_module_1 = require("./ws/ws.module");
 const database_module_1 = require("./database.module");
 const audit_module_1 = require("./audit/audit.module");
 const wserver_module_1 = require("./wserver/wserver.module");
+const pm2_permissions_module_1 = require("./pm2-permissions/pm2-permissions.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -31,6 +32,7 @@ exports.AppModule = AppModule = __decorate([
             ws_module_1.WsModule,
             audit_module_1.AuditModule,
             wserver_module_1.WserverModule,
+            pm2_permissions_module_1.PM2PermissionsModule,
         ],
     })
 ], AppModule);

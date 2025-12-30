@@ -31,4 +31,6 @@ __exportStar(require("./get-two-factor-status.dto"), exports);
 __exportStar(require("./audit-log.dto"), exports);
 __exportStar(require("./create-wserver.dto"), exports);
 __exportStar(require("./update-wserver.dto"), exports);
+__exportStar(require("./create-pm2-permission.dto"), exports);
+__exportStar(require("./update-pm2-permission.dto"), exports);
 //# sourceMappingURL=index.js.map
