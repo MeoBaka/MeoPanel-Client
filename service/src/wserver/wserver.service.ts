@@ -3,12 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Wserver } from '../entities/wserver.entity';
 import { CreateWserverDto, UpdateWserverDto } from '../dto';
+import { PM2Permissions } from '../entities/pm2-permissions.entity';
+import { User } from '../entities/user.entity';
 
 @Injectable()
 export class WserverService {
   constructor(
     @InjectRepository(Wserver)
     private readonly wserverRepository: Repository<Wserver>,
+    @InjectRepository(PM2Permissions)
+    private readonly pm2PermissionsRepository: Repository<PM2Permissions>,
   ) {}
 
   async create(wserverData: CreateWserverDto): Promise<Wserver> {
@@ -18,6 +22,24 @@ export class WserverService {
 
   async findAll(): Promise<Wserver[]> {
     return this.wserverRepository.find();
+  }
+
+  async findAllForUser(userId: string, userRole: string): Promise<Wserver[]> {
+    if (userRole === 'ADMIN' || userRole === 'OWNER') {
+      return this.findAll();
+    }
+    // Get unique wserverIds from pm2_permissions for the user
+    const permissions = await this.pm2PermissionsRepository.find({
+      where: { userId },
+      select: ['wserverId'],
+    });
+    const wserverIds = [...new Set(permissions.map(p => p.wserverId))];
+    if (wserverIds.length === 0) {
+      return [];
+    }
+    return this.wserverRepository.find({
+      where: wserverIds.map(id => ({ id })),
+    });
   }
 
   async findOne(id: string): Promise<Wserver> {

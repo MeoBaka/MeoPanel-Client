@@ -55,27 +55,28 @@ interface PM2TabProps {
 }
 
 export default function PM2Tab({ activeTab, user }: PM2TabProps) {
-   const { connectToServer, sendToServer, isConnected } = useWebSocket()
-   const [wservers, setWservers] = useState<WServer[]>([])
-   const [pm2Data, setPm2Data] = useState<Record<string, PM2Process[]>>({})
-   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connecting' | 'online' | 'offline'>>({})
-   const [pingLatencies, setPingLatencies] = useState<Record<string, number>>({})
-   const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
-   const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
-   const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
-   const [fileBrowserModal, setFileBrowserModal] = useState<{serverId: string, process: PM2Process, currentPath: string, files: any[], openFiles: {file: any, content: string, path: string, originalContent: string, modified: boolean}[], activeTabIndex: number, sidebarWidth: number, wordWrap: boolean, sidebarVisible: boolean, selectedFiles: Set<string>, clipboard: {type: 'cut' | 'copy', files: any[]} | null, contextMenu: {x: number, y: number, file: any} | null, isSelecting: boolean, selectionStart: number | null, renamingFile: string | null} | null>(null)
-   const [saveToast, setSaveToast] = useState<string | null>(null)
-   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
-   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
-   const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
-   const terminalRef = useRef<HTMLDivElement>(null)
-   const logsContainerRef = useRef<HTMLDivElement>(null)
-   const logsListenerRef = useRef<((event: MessageEvent, serverId: string) => void) | null>(null)
-   const [isResizing, setIsResizing] = useState(false)
-   const [startX, setStartX] = useState(0)
-   const [startWidth, setStartWidth] = useState(256)
-   const [userPermissions, setUserPermissions] = useState<PM2Permission[]>([])
-   const [permissionsLoading, setPermissionsLoading] = useState(true)
+    const { connectToServer, sendToServer, isConnected } = useWebSocket()
+    const [wservers, setWservers] = useState<WServer[]>([])
+    const [allServers, setAllServers] = useState<WServer[]>([])
+    const [pm2Data, setPm2Data] = useState<Record<string, PM2Process[]>>({})
+    const [connectionStatuses, setConnectionStatuses] = useState<Record<string, 'connecting' | 'online' | 'offline'>>({})
+    const [pingLatencies, setPingLatencies] = useState<Record<string, number>>({})
+    const [contextMenu, setContextMenu] = useState<{x: number, y: number, process: PM2Process, serverId: string} | null>(null)
+    const [selectedProcesses, setSelectedProcesses] = useState<Record<string, Set<string>>>({})
+    const [logsModal, setLogsModal] = useState<{serverId: string, process: PM2Process, logs: string[], command: string} | null>(null)
+    const [fileBrowserModal, setFileBrowserModal] = useState<{serverId: string, process: PM2Process, currentPath: string, files: any[], openFiles: {file: any, content: string, path: string, originalContent: string, modified: boolean}[], activeTabIndex: number, sidebarWidth: number, wordWrap: boolean, sidebarVisible: boolean, selectedFiles: Set<string>, clipboard: {type: 'cut' | 'copy', files: any[]} | null, contextMenu: {x: number, y: number, file: any} | null, isSelecting: boolean, selectionStart: number | null, renamingFile: string | null} | null>(null)
+    const [saveToast, setSaveToast] = useState<string | null>(null)
+    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+    const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null)
+    const [collapsedServers, setCollapsedServers] = useState<Record<string, boolean>>({})
+    const terminalRef = useRef<HTMLDivElement>(null)
+    const logsContainerRef = useRef<HTMLDivElement>(null)
+    const logsListenerRef = useRef<((event: MessageEvent, serverId: string) => void) | null>(null)
+    const [isResizing, setIsResizing] = useState(false)
+    const [startX, setStartX] = useState(0)
+    const [startWidth, setStartWidth] = useState(256)
+    const [userPermissions, setUserPermissions] = useState<PM2Permission[]>([])
+    const [permissionsLoading, setPermissionsLoading] = useState(true)
 
    useEffect(() => {
      const handleClickOutside = () => setContextMenu(null)
@@ -190,7 +191,18 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
    const onOpen = useCallback((ws: WebSocket, wserver: WServer) => {
      if (activeTab === 'pm2') {
-       sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
+       // For local server, use different authentication approach
+       if (wserver.id === 'local') {
+         const token = localStorage.getItem('accessToken')
+         sendToServer(wserver.id, {
+           uuid: wserver.uuid,
+           token: token, // Use JWT token for local server
+           command: 'pm2-list',
+           timestamp: Date.now()
+         })
+       } else {
+         sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
+       }
        updateIntervals.current[wserver.id] = setTimeout(() => {}, 0)
      }
    }, [activeTab, sendToServer])
@@ -314,7 +326,8 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           // Start realtime updates if not already running
           if (!updateIntervals.current[wserver.id]) {
             // Send pm2-list to start realtime stream
-            sendToServer(wserver.id, { uuid: wserver.uuid, token: wserver.token, command: 'pm2-list', timestamp: Date.now() })
+            const token = wserver.id === 'local' ? localStorage.getItem('accessToken') : wserver.token
+            sendToServer(wserver.id, { uuid: wserver.uuid, token: token, command: 'pm2-list', timestamp: Date.now() })
             updateIntervals.current[wserver.id] = setTimeout(() => {}, 0) // Placeholder to mark as started
           }
         } else {
@@ -345,17 +358,6 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
   }, [notification])
 
   const fetchWservers = async () => {
-    // Always include local server for PM2 management
-    const localServer = {
-      id: 'local',
-      servername: 'Local Server',
-      url: 'ws://localhost:5000', // WebSocket URL for local server
-      uuid: 'local-server',
-      token: 'local-token', // This will be validated by the server
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-
     try {
       const token = localStorage.getItem('accessToken')
       const response = await fetch('http://localhost:5000/wservers', {
@@ -365,17 +367,24 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       })
       if (response.ok) {
         const responseData = await response.json()
-        const remoteServers = responseData.data || []
-        setWservers([localServer, ...remoteServers])
+        const allServers = responseData.data || []
+        const localServer = allServers.find((s: WServer) => s.servername === 'Local Server')
+        if (localServer) {
+          // Use local server from database
+          setWservers([localServer, ...allServers.filter((s: WServer) => s.servername !== 'Local Server')])
+        } else {
+          // No local server in database, use remote servers only
+          setWservers(allServers)
+        }
       } else {
-        // If not authorized or other error, still provide local server
-        console.log('Not authorized to fetch wservers, using local server only')
-        setWservers([localServer])
+        // If not authorized or other error, no servers
+        console.log('Not authorized to fetch wservers')
+        setWservers([])
       }
     } catch (error) {
       console.error('Failed to fetch wservers:', error)
-      // If fetching fails, still provide local server
-      setWservers([localServer])
+      // If fetching fails, no servers
+      setWservers([])
     }
   }
 
@@ -534,15 +543,20 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     const wserver = wservers.find(s => s.id === serverId)
     if (isConnected(serverId) && wserver) {
       const command = `pm2-${action}`
+      const token = serverId === 'local' ? localStorage.getItem('accessToken') : wserver.token
       sendToServer(serverId, {
         command,
         uuid: wserver.uuid,
-        token: wserver.token
+        token: token
       })
       // Refresh the list
       setTimeout(() => {
         if (isConnected(serverId)) {
-          sendToServer(serverId, { command: 'pm2-list', uuid: wserver.uuid, token: wserver.token })
+          sendToServer(serverId, {
+            command: 'pm2-list',
+            uuid: wserver.uuid,
+            token: token
+          })
         }
       }, 1000)
     }
@@ -666,12 +680,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
         renamingFile: null
       })
       // Request files
+      const token = serverId === 'local' ? localStorage.getItem('accessToken') : wserver.token
       sendToServer(serverId, {
         command: 'pm2-list-files',
         id: process.pm_id,
         relativePath: '',
         uuid: wserver.uuid,
-        token: wserver.token
+        token: token
       })
     }
   }
@@ -697,13 +712,14 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
     if (wserver && isConnected(fileBrowserModal.serverId)) {
       const filePath = fileBrowserModal.currentPath ? `${fileBrowserModal.currentPath}/${fileName}` : fileName
+      const token = fileBrowserModal.serverId === 'local' ? localStorage.getItem('accessToken') : wserver.token
       sendToServer(fileBrowserModal.serverId, {
         command: 'pm2-create-file',
         id: fileBrowserModal.process.pm_id,
         relativePath: filePath,
         content: '',
         uuid: wserver.uuid,
-        token: wserver.token
+        token: token
       })
       // Refresh file list
       setTimeout(() => {
@@ -747,12 +763,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     if (!fileBrowserModal) return
     const wserver = wservers.find(s => s.id === fileBrowserModal.serverId)
     if (wserver && isConnected(fileBrowserModal.serverId)) {
+      const token = fileBrowserModal.serverId === 'local' ? localStorage.getItem('accessToken') : wserver.token
       sendToServer(fileBrowserModal.serverId, {
         command: 'pm2-delete-files',
         id: fileBrowserModal.process.pm_id,
         filePaths,
         uuid: wserver.uuid,
-        token: wserver.token
+        token: token
       })
       // Refresh file list
       setTimeout(() => {
@@ -946,7 +963,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                 </span>
               </div>
               <div className="flex items-center space-x-4 text-sm text-gray-300">
-                <span>Version: 1.0.0</span>
+                {user && user.role !== 'ADMIN' && user.role !== 'OWNER' && <span>Version: 1.0.0</span>}
                 <span>Amount: {stats.total}</span>
                 <span>Run: {stats.running}</span>
                 <span>Stop: {stats.stopped}</span>
