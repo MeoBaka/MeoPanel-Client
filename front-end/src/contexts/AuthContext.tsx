@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 
+const API_BASE_URL = `http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}`
+
 interface User {
   id: string
   name: string
@@ -77,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const token = localStorage.getItem('accessToken')
       if (token) {
-        const response = await fetch('http://localhost:5000/auth/me', {
+        const response = await fetch(`${API_BASE_URL}/auth/me`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -127,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      const response = await fetch('http://localhost:5000/auth/refresh', {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -141,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('refreshToken', data.refreshToken)
 
         // Get user profile
-        const profileResponse = await fetch('http://localhost:5000/auth/me', {
+        const profileResponse = await fetch(`${API_BASE_URL}/auth/me`, {
           headers: {
             'Authorization': `Bearer ${data.accessToken}`,
             'Content-Type': 'application/json',
@@ -177,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const login = async (email: string, password: string, twoFactorCode?: string) => {
-    const response = await fetch('http://localhost:5000/auth/login', {
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -218,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const register = async (data: { username: string; email: string; password: string; name?: string }) => {
-    const response = await fetch('http://localhost:5000/auth/register', {
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -240,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (typeof window !== 'undefined') {
         const refreshToken = localStorage.getItem('refreshToken')
         if (refreshToken) {
-          await fetch('http://localhost:5000/auth/logout', {
+          await fetch(`${API_BASE_URL}/auth/logout`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -266,7 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       if (typeof window !== 'undefined') {
         const token = localStorage.getItem('accessToken')
-        await fetch('http://localhost:5000/auth/logout-all', {
+        await fetch(`${API_BASE_URL}/auth/logout-all`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -291,7 +293,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return []
 
     const token = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/sessions', {
+    const response = await fetch(`${API_BASE_URL}/auth/sessions`, {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
@@ -309,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutSession = async (sessionId: string) => {
     const token = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/logout-session', {
+    const response = await fetch(`${API_BASE_URL}/auth/logout-session`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -328,7 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const forgotPassword = async (email: string) => {
-    const response = await fetch('http://localhost:5000/auth/forgot-password', {
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -346,7 +348,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const resetPassword = async (token: string, newPassword: string, confirmNewPassword: string) => {
-    const response = await fetch('http://localhost:5000/auth/reset-password', {
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -365,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const changePassword = async (currentPassword: string, newPassword: string) => {
     const token = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/change-password', {
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -384,7 +386,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const verifyEmail = async (token: string) => {
-    const response = await fetch('http://localhost:5000/auth/verify-email', {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -402,7 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const resendVerification = async (email: string) => {
-    const response = await fetch('http://localhost:5000/auth/resend-verification', {
+    const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -421,7 +423,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setupTwoFactor = async () => {
     const token = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/2fa/setup', {
+    const response = await fetch(`${API_BASE_URL}/auth/2fa/setup`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -440,7 +442,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyTwoFactor = async (token: string) => {
     const authToken = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/2fa/verify', {
+    const response = await fetch(`${API_BASE_URL}/auth/2fa/verify`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${authToken}`,
@@ -460,7 +462,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const disableTwoFactor = async (verificationToken: string, currentPassword: string) => {
     const token = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/2fa/disable', {
+    const response = await fetch(`${API_BASE_URL}/auth/2fa/disable`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -480,7 +482,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const regenerateBackupCodes = async (verificationToken: string, currentPassword: string) => {
     const token = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/2fa/regenerate-backup', {
+    const response = await fetch(`${API_BASE_URL}/auth/2fa/regenerate-backup`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -500,7 +502,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getTwoFactorStatus = async () => {
     const token = localStorage.getItem('accessToken')
-    const response = await fetch('http://localhost:5000/auth/2fa/status', {
+    const response = await fetch(`${API_BASE_URL}/auth/2fa/status`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

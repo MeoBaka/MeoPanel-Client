@@ -9,18 +9,20 @@ async function bootstrap() {
   app.useGlobalFilters(new SecurityExceptionFilter());
 
   // Enable CORS for frontend
+  const corsOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['http://localhost:3000'];
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'], // Allow frontend origins
+    origin: corsOrigins, // Allow frontend origins
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   const port = process.env.SERVICE_PORT;
+  const host = process.env.SERVICE_HOST || 'localhost';
   if (!port) {
     throw new Error('SERVICE_PORT is not defined in environment variables');
   }
-  await app.listen(port);
-  console.log(`Service is running on port ${port}`);
+  await app.listen(port, host);
+  console.log(`Service is running on ${host}:${port}`);
 }
 bootstrap();

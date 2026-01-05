@@ -632,7 +632,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
   const fetchWservers = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch('http://localhost:5000/wservers', {
+      const response = await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/wservers`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -667,7 +667,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     }
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch(`http://localhost:5000/pm2-permissions/user/${user.id}`, {
+      const response = await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/pm2-permissions/user/${user.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

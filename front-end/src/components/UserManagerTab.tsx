@@ -32,7 +32,7 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch('http://localhost:5000/users', {
+      const response = await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
       const token = localStorage.getItem('accessToken')
 
       // Update name
-      const updateResponse = await fetch(`http://localhost:5000/users/${targetUser.id}`, {
+      const updateResponse = await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/users/${targetUser.id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -99,7 +99,7 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
 
       // Update role if changed and allowed
       if (canEditRole(targetUser) && editForm.role !== targetUser.role) {
-        await fetch(`http://localhost:5000/users/${targetUser.id}/role`, {
+        await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/users/${targetUser.id}/role`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -111,7 +111,7 @@ export default function UserManagerTab({ activeTab }: UserManagerTabProps) {
 
       // Update status if changed
       if (editForm.status !== targetUser.status) {
-        await fetch(`http://localhost:5000/users/${targetUser.id}/status`, {
+        await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/users/${targetUser.id}/status`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
