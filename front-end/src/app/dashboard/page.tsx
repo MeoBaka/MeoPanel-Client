@@ -2,14 +2,15 @@
 
 import { useAuth } from '@/contexts/AuthContext'
 import { WebSocketProvider } from '@/contexts/WebSocketContext'
+import { PM2DataProvider } from '@/contexts/PM2DataContext'
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import WServerTab from '@/components/WServerTab'
 import PM2Tab from '@/components/PM2Tab'
 import InstanceTab from '@/components/InstanceTab'
 import UserManagerTab from '@/components/UserManagerTab'
-import UserPermissionsTab from '@/components/UserPermissionsTab'
-import AdminLogTab from '@/components/AdminLogTab'
+import UserPermissionsTab from '@/features/user-permissions/UserPermissionsTab'
+import AdminLogTab from '@/features/admin-logs/AdminLogTab'
 import Header from '@/components/Header'
 
 export const dynamic = 'force-dynamic'
@@ -144,8 +145,9 @@ export default function Dashboard() {
           </div>
 
           {/* Tab Content */}
-          <WebSocketProvider user={user}>
-            <div className="tab-content">
+          <PM2DataProvider>
+            <WebSocketProvider user={user}>
+              <div className="tab-content">
               {user && (user.role === 'ADMIN' || user.role === 'OWNER') && (
                 <div className={activeTab === 'wserver' ? '' : 'hidden'}>
                   <WServerTab activeTab={activeTab} user={user} />
@@ -174,6 +176,7 @@ export default function Dashboard() {
                )}
             </div>
           </WebSocketProvider>
+        </PM2DataProvider>
         </div>
       </main>
 

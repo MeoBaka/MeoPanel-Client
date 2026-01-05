@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useWebSocket } from '@/contexts/WebSocketContext'
+import { usePM2Data } from '@/contexts/PM2DataContext'
 // import { Terminal } from 'xterm'
 // import { FitAddon } from 'xterm-addon-fit'
 // import 'xterm/css/xterm.css'
@@ -63,7 +64,8 @@ interface PM2TabProps {
 }
 
 export default function PM2Tab({ activeTab, user }: PM2TabProps) {
-    const { connectToServer, sendToServer, isConnected } = useWebSocket()
+     const { connectToServer, sendToServer, isConnected } = useWebSocket()
+     const { updatePM2Data } = usePM2Data()
 
     const isImageFile = (filename: string): boolean => {
         const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
