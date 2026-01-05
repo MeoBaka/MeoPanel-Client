@@ -21,7 +21,7 @@ Route (app)                              Size     First Load JS
 ├ ○ /_not-found                          873 B          88.2 kB
 ├ ○ /dashboard                           20.3 kB         110 kB
 ├ ○ /reset-password                      2.69 kB          90 kB
-├ ○ /settings                            5.16 kB        94.7 kB
+├ ○ /settings                            5.16 kB        94.6 kB
 └ ○ /verify-email                        2.52 kB        89.8 kB
 + First Load JS shared by all            87.3 kB
   ├ chunks/364-a525e6a5e8525218.js       31.7 kB
