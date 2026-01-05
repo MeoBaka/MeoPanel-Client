@@ -8,6 +8,12 @@ import AdminLogTable from './components/AdminLogTable'
 import AdminLogPagination from './components/AdminLogPagination'
 import AdminLogModal from './components/AdminLogModal'
 
+/**
+ * Renders the Admin Log tab UI with filters, table, pagination, and a detail modal.
+ *
+ * @param activeTab - Identifier of the currently active tab (used to determine visibility or context)
+ * @returns The rendered Admin Log tab as a JSX element
+ */
 export default function AdminLogTab({ activeTab }: AdminLogTabProps) {
   const {
     logs,

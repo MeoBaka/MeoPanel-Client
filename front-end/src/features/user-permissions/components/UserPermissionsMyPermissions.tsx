@@ -5,6 +5,13 @@ interface UserPermissionsMyPermissionsProps {
   permissionOptions: PermissionOption[]
 }
 
+/**
+ * Renders a card titled "My PM2 Permissions" showing the current user's PM2 process permissions.
+ *
+ * @param myPermissions - Array of PM2 permissions to display; each item represents a process with its assigned permission values and optional server info.
+ * @param permissionOptions - Lookup options mapping permission values to human-readable labels used for badges.
+ * @returns The rendered React element containing the permissions card, a message when empty, or a list of permission items with labeled badges.
+ */
 export default function UserPermissionsMyPermissions({
   myPermissions,
   permissionOptions

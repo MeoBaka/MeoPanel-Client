@@ -7,6 +7,15 @@ interface AdminLogFiltersProps {
   onApplyFilters: () => void
 }
 
+/**
+ * Renders a filter panel for admin logs with controls for username, resource, start date, end date, and an apply button.
+ *
+ * @param filters - Current applied filters (read-only in this component).
+ * @param tempFilters - Temporary filter values used by the controlled input controls.
+ * @param onTempFiltersChange - Callback invoked with updated temporary filters when any input changes.
+ * @param onApplyFilters - Callback invoked when the Filter button is clicked to apply the temporary filters.
+ * @returns The filter panel UI as a JSX element.
+ */
 export default function AdminLogFilters({
   filters,
   tempFilters,

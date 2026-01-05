@@ -6,6 +6,16 @@ interface AdminLogPaginationProps {
   onPageChange: (page: number) => void
 }
 
+/**
+ * Render pagination controls and an entry range summary for the admin logs view.
+ *
+ * @param currentPage - The current 1-based page number
+ * @param totalPages - The total number of pages available
+ * @param total - The total number of log entries across all pages
+ * @param logsCount - The number of log entries on the current page (used to compute the shown start)
+ * @param onPageChange - Callback invoked with the target page number when the user navigates
+ * @returns A JSX element displaying "Showing X to Y of Z entries" and Previous / Next controls
+ */
 export default function AdminLogPagination({
   currentPage,
   totalPages,

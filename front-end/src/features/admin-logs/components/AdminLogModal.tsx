@@ -6,6 +6,11 @@ interface AdminLogModalProps {
   onClose: () => void
 }
 
+/**
+ * Render a centered modal that displays detailed, read-only information for an audit log when open.
+ *
+ * @returns A JSX element containing the audit log details modal, or `null` if `isOpen` is false or no `selectedLog` is provided.
+ */
 export default function AdminLogModal({ selectedLog, isOpen, onClose }: AdminLogModalProps) {
   if (!isOpen || !selectedLog) return null
 

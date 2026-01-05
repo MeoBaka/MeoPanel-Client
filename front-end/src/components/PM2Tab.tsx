@@ -63,6 +63,13 @@ interface PM2TabProps {
   user: User | null
 }
 
+/**
+ * Render the PM2 Management tab UI with real-time server/process controls, logs, and a file explorer.
+ *
+ * @param activeTab - The currently active application tab; when equal to `'pm2'` the component establishes realtime connections and streams PM2 data.
+ * @param user - The current authenticated user (or `null`); used to determine permission-based UI actions and visibility.
+ * @returns The PM2 management interface as a JSX element.
+ */
 export default function PM2Tab({ activeTab, user }: PM2TabProps) {
      const { connectToServer, sendToServer, isConnected } = useWebSocket()
      const { updatePM2Data } = usePM2Data()

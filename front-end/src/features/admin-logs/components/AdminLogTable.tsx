@@ -5,6 +5,13 @@ interface AdminLogTableProps {
   onRowDoubleClick: (log: AuditLog) => void
 }
 
+/**
+ * Render a styled table of audit logs where double-clicking a row invokes a callback.
+ *
+ * @param logs - Array of audit log entries to display; each row shows time, user, action, resource, details, IP, and success status.
+ * @param onRowDoubleClick - Callback invoked with the corresponding `AuditLog` when a row is double-clicked.
+ * @returns The table element displaying the provided audit logs.
+ */
 export default function AdminLogTable({ logs, onRowDoubleClick }: AdminLogTableProps) {
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden">

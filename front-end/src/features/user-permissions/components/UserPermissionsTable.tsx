@@ -6,6 +6,14 @@ interface UserPermissionsTableProps {
   onDeletePermission: (permissionId: string) => void
 }
 
+/**
+ * Renders a table of user permissions with mapped labels and a delete action.
+ *
+ * @param permissions - List of permissions to display; each row shows user, server, process, and permission values.
+ * @param permissionOptions - Mapping of permission `value` to human-readable `label` used for each permission chip; falls back to the raw value when missing.
+ * @param onDeletePermission - Callback invoked with the permission `id` when the row's Delete button is clicked.
+ * @returns A JSX element rendering the permissions table.
+ */
 export default function UserPermissionsTable({
   permissions,
   permissionOptions,

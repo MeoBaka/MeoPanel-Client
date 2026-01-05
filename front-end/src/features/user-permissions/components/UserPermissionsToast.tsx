@@ -4,6 +4,12 @@ interface UserPermissionsToastProps {
   toast: Toast | null
 }
 
+/**
+ * Render a bottom-right toast notification when a toast is provided.
+ *
+ * @param toast - Toast data to display; if `null`, the component renders nothing.
+ * @returns A positioned toast element showing `toast.message` with a green background for `toast.type === 'success'` and red otherwise, or `null` when no toast is provided.
+ */
 export default function UserPermissionsToast({ toast }: UserPermissionsToastProps) {
   if (!toast) return null
 

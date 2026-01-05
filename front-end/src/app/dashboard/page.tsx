@@ -15,6 +15,13 @@ import Header from '@/components/Header'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Render the authenticated dashboard page with persisted, role-restricted tabs.
+ *
+ * Renders a centered loading spinner while authentication is in progress, redirects unauthenticated users to `/`, and shows tab navigation and tab-specific content (with PM2 and WebSocket contexts) for authenticated users. The selected tab is persisted in localStorage and non-admin users are forced to the PM2 tab.
+ *
+ * @returns The dashboard page as JSX.Element containing header, tab navigation, tab content, and footer.
+ */
 export default function Dashboard() {
    const { user, logout, isLoading } = useAuth()
     const [activeTab, setActiveTab] = useState('pm2')

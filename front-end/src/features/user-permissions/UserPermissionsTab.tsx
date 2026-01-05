@@ -11,6 +11,14 @@ import UserPermissionsEditor from './components/UserPermissionsEditor'
 import UserPermissionsTable from './components/UserPermissionsTable'
 import UserPermissionsToast from './components/UserPermissionsToast'
 
+/**
+ * Render and manage the User PM2 Permissions tab UI.
+ *
+ * Renders the permissions view for users, conditionally showing the current user's permissions for members and the editor/table for admins and owners; manages PM2 process fetching via WebSocket with short-term caching and wires UI controls to permission actions.
+ *
+ * @param activeTab - Identifier of the currently active tab (used to control visibility or context)
+ * @returns The rendered User Permissions tab element
+ */
 export default function UserPermissionsTab({ activeTab }: UserPermissionsTabProps) {
   const { user } = useAuth()
   const { connectToServer, sendToServer, isConnected } = useWebSocket()

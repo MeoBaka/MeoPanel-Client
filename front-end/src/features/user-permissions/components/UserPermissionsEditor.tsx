@@ -20,6 +20,33 @@ interface UserPermissionsEditorProps {
   onSave: () => void
 }
 
+/**
+ * Render a controlled UI for assigning PM2 process permissions to a user on a selected server.
+ *
+ * Provides selectors for user and server, a selectable list of PM2 processes (with a select/unselect-all toggle),
+ * and — when a user, server, and at least one process are selected — checkboxes for permission options
+ * (also with a select/unselect-all toggle). A save button invokes the provided save handler and is disabled
+ * until required selections are made.
+ *
+ * @param users - Available users to choose from
+ * @param wservers - Available servers to choose from
+ * @param pm2Processes - List of discovered PM2 processes to display
+ * @param permissionOptions - Available permission options presented as checkbox items
+ * @param selectedUser - Currently selected user id
+ * @param selectedServer - Currently selected server id
+ * @param selectedProcesses - Names of currently selected PM2 processes
+ * @param currentPermissions - Currently selected permission values
+ * @param saving - True when a save operation is in progress (disables the save button)
+ * @param fetchingProcesses - True while PM2 processes are being loaded
+ * @param onUserChange - Called with the new user id when user selection changes
+ * @param onServerChange - Called with the new server id when server selection changes
+ * @param onProcessToggle - Toggles a process selection; called with the process name
+ * @param onSelectAllProcesses - Toggles select/unselect all processes
+ * @param onPermissionToggle - Toggles a permission; called with the permission value
+ * @param onSelectAllPermissions - Toggles select/unselect all permissions
+ * @param onSave - Called when the Save button is clicked
+ * @returns A JSX element containing the permissions editor UI
+ */
 export default function UserPermissionsEditor({
   users,
   wservers,
