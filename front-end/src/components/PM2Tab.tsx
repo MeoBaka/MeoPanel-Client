@@ -103,13 +103,15 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     }
 
     const renderTree = (items: TreeItem[], level: number = 0): JSX.Element[] => {
-        return items.map((item, index) => (
-            <div key={item.path}>
-                <div
-                    className={`flex items-center p-1 rounded cursor-pointer hover:bg-gray-700 text-sm ${
-                        fileBrowserModal!.selectedFiles.has(item.path) ? 'bg-blue-600 text-white' : item.isDirectory ? 'text-blue-400' : 'text-gray-300'
-                    }`}
-                    style={{ paddingLeft: `${level * 16 + 4}px` }}
+        return items.map((item, index) => {
+            const currentItem = item
+            return (
+                <div key={item.path}>
+                    <div
+                        className={`flex items-center p-1 rounded cursor-pointer hover:bg-gray-700 text-sm ${
+                            fileBrowserModal!.selectedFiles.has(item.path) ? 'bg-blue-600 text-white' : item.isDirectory ? 'text-blue-400' : 'text-gray-300'
+                        }`}
+                        style={{ paddingLeft: `${level * 16 + 4}px` }}
                     onClick={(e) => {
                         if (item.isDirectory) {
                             // Toggle expand
@@ -192,6 +194,51 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                         e.preventDefault()
                         setFileBrowserModal(prev => prev ? { ...prev, contextMenu: { x: e.clientX, y: e.clientY, file: { name: item.name, isDirectory: item.isDirectory } } } : null)
                     }}
+                    onDrop={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            const files = Array.from(e.dataTransfer.files)
+                            const targetPath = item.isDirectory ? item.path : (item.path.includes('/') ? item.path.substring(0, item.path.lastIndexOf('/')) : '')
+                            files.forEach(f => uploadFile(f, targetPath))
+                            return
+                        }
+                        if (item.isDirectory && !item.expanded) {
+                            const draggedPath = e.dataTransfer.getData('text/plain')
+                            if (draggedPath && draggedPath !== item.path) {
+                                const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                    sendToServer(fileBrowserModal!.serverId, {
+                                        command: 'pm2-move-file',
+                                        id: fileBrowserModal!.process.pm_id,
+                                        sourcePath: draggedPath,
+                                        destinationPath: item.path,
+                                        uuid: wserver.uuid,
+                                        token: wserver.token
+                                    })
+                                    // Refresh file list
+                                    setTimeout(() => {
+                                        sendToServer(fileBrowserModal!.serverId, {
+                                            command: 'pm2-list-files',
+                                            id: fileBrowserModal!.process.pm_id,
+                                            relativePath: fileBrowserModal!.currentPath,
+                                            uuid: wserver.uuid,
+                                            token: wserver.token
+                                        })
+                                    }, 500)
+                                }
+                            }
+                        }
+                    }}
+                    onDragOver={(e) => {
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'copy'
+                        } else if (item.isDirectory && !item.expanded) {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                        }
+                    }}
                 >
                     {item.isDirectory ? (
                         <span className="mr-1">{item.expanded ? '▼' : '▶'}</span>
@@ -206,7 +253,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                     </div>
                 )}
             </div>
-        ))
+        )}        )
     }
     const [wservers, setWservers] = useState<WServer[]>([])
     const [allServers, setAllServers] = useState<WServer[]>([])
@@ -2075,41 +2122,41 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                                   }
                                 }}
                                 onDrop={(e) => {
-                                  e.preventDefault()
-                                  e.stopPropagation()
-                                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                                    const files = Array.from(e.dataTransfer.files)
-                                    const targetPath = item.isDirectory ? item.path : item.path.split('/').slice(0, -1).join('/') || ''
-                                    files.forEach(file => uploadFile(file, targetPath))
-                                    return
-                                  }
-                                  if (file.isDirectory && !isRenaming) {
-                                    const draggedPath = e.dataTransfer.getData('text/plain')
-                                    if (draggedPath && draggedPath !== filePath) {
-                                      const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
-                                      if (wserver && isConnected(fileBrowserModal!.serverId)) {
-                                        sendToServer(fileBrowserModal!.serverId, {
-                                          command: 'pm2-move-file',
-                                          id: fileBrowserModal!.process.pm_id,
-                                          sourcePath: draggedPath,
-                                          destinationPath: filePath,
-                                          uuid: wserver.uuid,
-                                          token: wserver.token
-                                        })
-                                        // Refresh file list
-                                        setTimeout(() => {
-                                          sendToServer(fileBrowserModal!.serverId, {
-                                            command: 'pm2-list-files',
-                                            id: fileBrowserModal!.process.pm_id,
-                                            relativePath: fileBrowserModal!.currentPath,
-                                            uuid: wserver.uuid,
-                                            token: wserver.token
-                                          })
-                                        }, 500)
-                                      }
-                                    }
-                                  }
-                                }}
+                                   e.preventDefault()
+                                   e.stopPropagation()
+                                   if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                     const files = Array.from(e.dataTransfer.files)
+                                     const targetPath = file.isDirectory ? filePath : (filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : '')
+                                     files.forEach(f => uploadFile(f, targetPath))
+                                     return
+                                   }
+                                   if (file.isDirectory && !isRenaming) {
+                                     const draggedPath = e.dataTransfer.getData('text/plain')
+                                     if (draggedPath && draggedPath !== filePath) {
+                                       const wserver = wservers.find(s => s.id === fileBrowserModal!.serverId)
+                                       if (wserver && isConnected(fileBrowserModal!.serverId)) {
+                                         sendToServer(fileBrowserModal!.serverId, {
+                                           command: 'pm2-move-file',
+                                           id: fileBrowserModal!.process.pm_id,
+                                           sourcePath: draggedPath,
+                                           destinationPath: filePath,
+                                           uuid: wserver.uuid,
+                                           token: wserver.token
+                                         })
+                                         // Refresh file list
+                                         setTimeout(() => {
+                                           sendToServer(fileBrowserModal!.serverId, {
+                                             command: 'pm2-list-files',
+                                             id: fileBrowserModal!.process.pm_id,
+                                             relativePath: fileBrowserModal!.currentPath,
+                                             uuid: wserver.uuid,
+                                             token: wserver.token
+                                           })
+                                         }, 500)
+                                       }
+                                     }
+                                   }
+                                 }}
                                 onDoubleClick={() => {
                                   if (isRenaming) return
 
