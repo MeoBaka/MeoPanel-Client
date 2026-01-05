@@ -205,7 +205,7 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
   const fetchWservers = async () => {
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch('http://localhost:5000/wservers', {
+      const response = await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/wservers`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -224,7 +224,7 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
     setLoading(true)
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch('http://localhost:5000/wservers', {
+      const response = await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/wservers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +249,7 @@ export default function WServerTab({ activeTab, user }: WServerTabProps) {
   const handleDelete = async (id: string) => {
     try {
       const token = localStorage.getItem('accessToken')
-      const response = await fetch(`http://localhost:5000/wservers/${id}`, {
+      const response = await fetch(`http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}/wservers/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

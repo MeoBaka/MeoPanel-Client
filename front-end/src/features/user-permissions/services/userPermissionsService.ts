@@ -1,6 +1,6 @@
 import { User, WServer, PM2Permission, PM2Process } from '../types'
 
-const API_BASE_URL = 'http://localhost:5000'
+const API_BASE_URL = `http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}`
 
 export const fetchUsers = async (): Promise<User[]> => {
   const token = localStorage.getItem('accessToken')
@@ -21,7 +21,7 @@ export const fetchWservers = async (): Promise<WServer[]> => {
   const localServer = {
     id: 'local',
     servername: 'Local Server',
-    url: 'ws://localhost:5000',
+    url: `ws://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}`,
     uuid: 'local-server',
     token: 'local-token',
     createdAt: new Date().toISOString(),

@@ -1,6 +1,6 @@
 import { AuditLog, Filters, FetchAuditLogsResponse } from '../types'
 
-const API_BASE_URL = 'http://localhost:5000'
+const API_BASE_URL = `http://${process.env.NEXT_PUBLIC_SERVICE_HOST}:${process.env.NEXT_PUBLIC_SERVICE_PORT}`
 
 export const fetchAuditLogs = async (
   page: number,

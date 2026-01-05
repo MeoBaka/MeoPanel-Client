@@ -3,6 +3,7 @@
 > next build
 
   ▲ Next.js 14.2.35
+  - Environments: .env
 
    Creating an optimized production build ...
  ✓ Compiled successfully
@@ -19,10 +20,10 @@
 Route (app)                              Size     First Load JS
 ┌ ○ /                                    2.76 kB        92.3 kB
 ├ ○ /_not-found                          873 B          88.2 kB
-├ ○ /dashboard                           20.3 kB         110 kB
-├ ○ /reset-password                      2.69 kB          90 kB
-├ ○ /settings                            5.16 kB        94.6 kB
-└ ○ /verify-email                        2.52 kB        89.8 kB
+├ ○ /dashboard                           20.4 kB         110 kB
+├ ○ /reset-password                      2.71 kB          90 kB
+├ ○ /settings                            5.16 kB        94.7 kB
+└ ○ /verify-email                        2.55 kB        89.8 kB
 + First Load JS shared by all            87.3 kB
   ├ chunks/364-a525e6a5e8525218.js       31.7 kB
   ├ chunks/618f8807-5c6e9f024e3bc9e7.js  53.6 kB
