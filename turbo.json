@@ -8,7 +8,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "env": ["FRONTEND_PORT"]
     },
     "start": {
       "dependsOn": ["build"],

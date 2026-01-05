@@ -1,4 +1,4 @@
-// File: d:\PDev\MeoPanel\MeoPanel-Client\front-end\src\app\verify-email\page.tsx
+// File: D:\PDev\MeoPanel\MeoPanel-Client\front-end\src\app\verify-email\page.tsx
 import * as entry from '../../../../src/app/verify-email/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
