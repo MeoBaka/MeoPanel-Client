@@ -5,27 +5,29 @@
   ▲ Next.js 14.2.35
 
    Creating an optimized production build ...
-<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving '../../../typescript/lib/typescript' in d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build for build dependencies doesn't lead to expected result 'D:\PDev\MeoPanel\MeoPanel-Client\node_modules\typescript\lib\typescript.js', but to 'd:\PDev\MeoPanel\MeoPanel-Client\node_modules\typescript\lib\typescript.js' instead. Resolving dependencies are ignored for this path.
-<w>  at resolve commonjs file ../../../typescript/lib/typescript (expected D:\PDev\MeoPanel\MeoPanel-Client\node_modules\typescript\lib\typescript.js)
-<w>  at file dependencies d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\load-jsconfig.js
-<w>  at file d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\load-jsconfig.js
-<w>  at file dependencies d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\webpack-config.js
-<w>  at file d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\webpack-config.js
-<w>  at file dependencies d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\handle-externals.js
-<w>  at file d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\handle-externals.js
-<w>  at file dependencies d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js
-<w>  at file d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js
-<w>  at resolve commonjs d:\PDev\MeoPanel\MeoPanel-Client\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js
-uncaughtException [Error: EPERM: operation not permitted, open 'd:\PDev\MeoPanel\MeoPanel-Client\front-end\.next\trace'] {
-  errno: -4048,
-  code: 'EPERM',
-  syscall: 'open',
-  path: 'd:\\PDev\\MeoPanel\\MeoPanel-Client\\front-end\\.next\\trace'
-}
-npm error Lifecycle script `build` failed with error:
-npm error code 1
-npm error path d:\PDev\MeoPanel\MeoPanel-Client\front-end
-npm error workspace front-end@0.1.0
-npm error location d:\PDev\MeoPanel\MeoPanel-Client\front-end
-npm error command failed
-npm error command C:\WINDOWS\system32\cmd.exe /d /s /c next build
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/8) ...
+   Generating static pages (2/8) 
+   Generating static pages (4/8) 
+   Generating static pages (6/8) 
+ ✓ Generating static pages (8/8)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    2.76 kB        92.3 kB
+├ ○ /_not-found                          873 B          88.2 kB
+├ ○ /dashboard                           20.3 kB         110 kB
+├ ○ /reset-password                      2.69 kB          90 kB
+├ ○ /settings                            5.16 kB        94.7 kB
+└ ○ /verify-email                        2.52 kB        89.8 kB
++ First Load JS shared by all            87.3 kB
+  ├ chunks/364-a525e6a5e8525218.js       31.7 kB
+  ├ chunks/618f8807-5c6e9f024e3bc9e7.js  53.6 kB
+  └ other shared chunks (total)          1.96 kB
+
+
+○  (Static)  prerendered as static content
+
