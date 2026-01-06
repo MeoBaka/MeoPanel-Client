@@ -64,7 +64,7 @@ interface PM2TabProps {
 }
 
 export default function PM2Tab({ activeTab, user }: PM2TabProps) {
-     const { connectToServer, sendToServer, isConnected } = useWebSocket()
+     const { connectToServer, sendToServer, disconnectFromServer, isConnected } = useWebSocket()
      const { updatePM2Data } = usePM2Data()
 
     const isImageFile = (filename: string): boolean => {
@@ -279,11 +279,28 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
     const [startWidth, setStartWidth] = useState(256)
     const [userPermissions, setUserPermissions] = useState<PM2Permission[]>([])
     const [permissionsLoading, setPermissionsLoading] = useState(true)
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<Record<string, number>>({})
+    const [selectedContextMenu, setSelectedContextMenu] = useState<{x: number, y: number} | null>(null)
+    const [disconnectedServers, setDisconnectedServers] = useState<Set<string>>(new Set())
+    const [isSelecting, setIsSelecting] = useState(false)
+    const [selectionStart, setSelectionStart] = useState<number | null>(null)
 
    useEffect(() => {
-     const handleClickOutside = () => setContextMenu(null)
+     const handleClickOutside = () => {
+       setContextMenu(null)
+       setSelectedContextMenu(null)
+     }
      document.addEventListener('click', handleClickOutside)
      return () => document.removeEventListener('click', handleClickOutside)
+   }, [])
+
+   useEffect(() => {
+     const handleMouseUp = () => {
+       setIsSelecting(false)
+       setSelectionStart(null)
+     }
+     document.addEventListener('mouseup', handleMouseUp)
+     return () => document.removeEventListener('mouseup', handleMouseUp)
    }, [])
 
    useEffect(() => {
@@ -575,7 +592,9 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
 
     // Connect to WebSocket for each wserver
     wservers.forEach(wserver => {
-      connectToServer(wserver, handleMessage, onOpen)
+      if (!disconnectedServers.has(wserver.id)) {
+        connectToServer(wserver, handleMessage, onOpen)
+      }
     })
 
     return () => {
@@ -794,7 +813,7 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           const ids = processNames.map(name => {
             const proc = pm2Data[serverId].find(p => p.name === name)
             return proc ? proc.pm_id : null
-          }).filter(Boolean) as number[]
+          }).filter(id => id !== null && id !== undefined) as number[]
           message.ids = ids
         }
         sendToServer(serverId, message)
@@ -1325,29 +1344,54 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                    connectionStatus === 'online' ? 'Online' : 'Offline'}
                 </span>
               </div>
-              <div className="flex items-center space-x-4 text-sm text-gray-300">
-                {user && user.role !== 'ADMIN' && user.role !== 'OWNER' && <span>Version: 1.0.0</span>}
-                <span>Amount: {stats.total}</span>
-                <span>Run: {stats.running}</span>
-                <span>Stop: {stats.stopped}</span>
-                <span>Error: {stats.error}</span>
-                <span>Ping: {pingLatencies[wserver.id] ? `${pingLatencies[wserver.id]}ms` : 'N/A'}</span>
-                {(user && (user.role === 'ADMIN' || user.role === 'OWNER') || userPermissions.some(p => p.wserverId === wserver.id)) && (
-                  <>
-                    <button
-                      onClick={() => handleGlobalAction(wserver.id, 'save')}
-                      className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => handleGlobalAction(wserver.id, 'resurrect')}
-                      className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
-                    >
-                      Resurrect
-                    </button>
-                  </>
-                )}
+              <div className="flex flex-col items-end space-y-2">
+                <div className="flex items-center space-x-4 text-sm text-gray-300">
+                  {user && user.role !== 'ADMIN' && user.role !== 'OWNER' && <span>Version: 1.0.0</span>}
+                  <span>Amount: {stats.total}</span>
+                  <span>Run: {stats.running}</span>
+                  <span>Stop: {stats.stopped}</span>
+                  <span>Error: {stats.error}</span>
+                  <span>Ping: {pingLatencies[wserver.id] ? `${pingLatencies[wserver.id]}ms` : 'N/A'}</span>
+                  {(user && (user.role === 'ADMIN' || user.role === 'OWNER') || userPermissions.some(p => p.wserverId === wserver.id)) && (
+                    <>
+                      <button
+                        onClick={() => handleGlobalAction(wserver.id, 'save')}
+                        className="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => handleGlobalAction(wserver.id, 'resurrect')}
+                        className="px-3 py-1 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
+                      >
+                        Resurrect
+                      </button>
+                      <button
+                        onClick={() => {
+                          disconnectFromServer(wserver.id)
+                          setConnectionStatuses(prev => ({ ...prev, [wserver.id]: 'offline' }))
+                          setDisconnectedServers(prev => new Set(prev).add(wserver.id))
+                        }}
+                        className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                      >
+                        Disconnect
+                      </button>
+                      <button
+                        onClick={() => {
+                          connectToServer(wserver, handleMessage, onOpen)
+                          setDisconnectedServers(prev => {
+                            const newSet = new Set(prev)
+                            newSet.delete(wserver.id)
+                            return newSet
+                          })
+                        }}
+                        className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                      >
+                        Reconnect
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1386,31 +1430,90 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                   </tr>
                 </thead>
                 <tbody className="bg-gray-800 divide-y divide-gray-700">
-                  {processes.map((process) => (
+                  {processes.map((process, index) => (
                     <tr
                       key={`${wserver.id}-${process.pm_id}`}
-                      className={selectedProcesses[wserver.id]?.has(process.name) ? 'bg-gray-700' : ''}
+                      className={`${selectedProcesses[wserver.id]?.has(process.name) ? 'bg-gray-700' : ''} cursor-pointer`}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).tagName === 'INPUT') return
+                        const isSelected = selectedProcesses[wserver.id]?.has(process.name) || false
+                        const newSelected = new Set(selectedProcesses[wserver.id] || [])
+                        if (e.ctrlKey || e.metaKey) {
+                          // Toggle selection
+                          if (isSelected) {
+                            newSelected.delete(process.name)
+                          } else {
+                            newSelected.add(process.name)
+                          }
+                          setLastSelectedIndex(prev => ({ ...prev, [wserver.id]: index }))
+                        } else if (e.shiftKey && lastSelectedIndex[wserver.id] !== undefined) {
+                          // Range selection
+                          const start = Math.min(lastSelectedIndex[wserver.id], index)
+                          const end = Math.max(lastSelectedIndex[wserver.id], index)
+                          for (let i = start; i <= end; i++) {
+                            newSelected.add(processes[i].name)
+                          }
+                        } else {
+                          // Single selection
+                          newSelected.clear()
+                          newSelected.add(process.name)
+                          setLastSelectedIndex(prev => ({ ...prev, [wserver.id]: index }))
+                        }
+                        setSelectedProcesses(prev => ({ ...prev, [wserver.id]: newSelected }))
+                      }}
                       onContextMenu={(e) => {
                         e.preventDefault()
-                        setContextMenu({ x: e.clientX, y: e.clientY, process, serverId: wserver.id })
+                        e.stopPropagation()
+                        if (getTotalSelected() > 1) {
+                          setSelectedContextMenu({ x: e.clientX, y: e.clientY })
+                        } else {
+                          setContextMenu({ x: e.clientX, y: e.clientY, process, serverId: wserver.id })
+                        }
                       }}
                     >
-                      <td className="w-12 px-2 py-2 text-white">
+                      <td className="w-12 px-2 py-2 text-white" onMouseDown={(e) => {
+                        if ((e.target as HTMLElement).tagName === 'INPUT') {
+                          e.stopPropagation()
+                          // Toggle the checkbox
+                          setSelectedProcesses(prev => {
+                            const current = prev[wserver.id] || new Set()
+                            const newSet = new Set(current)
+                            const isSelected = newSet.has(process.name)
+                            if (isSelected) {
+                              newSet.delete(process.name)
+                            } else {
+                              newSet.add(process.name)
+                            }
+                            return { ...prev, [wserver.id]: newSet }
+                          })
+                          setLastSelectedIndex(prev => ({ ...prev, [wserver.id]: index }))
+                        } else {
+                          // Start drag selection
+                          setIsSelecting(true)
+                          setSelectionStart(index)
+                          setSelectedProcesses(prev => {
+                            const newSelected = new Set(prev[wserver.id] || [])
+                            newSelected.add(process.name)
+                            return { ...prev, [wserver.id]: newSelected }
+                          })
+                          setLastSelectedIndex(prev => ({ ...prev, [wserver.id]: index }))
+                        }
+                      }} onMouseEnter={() => {
+                        if (isSelecting && selectionStart !== null) {
+                          const start = Math.min(selectionStart, index)
+                          const end = Math.max(selectionStart, index)
+                          setSelectedProcesses(prev => {
+                            const newSelected = new Set(prev[wserver.id] || [])
+                            for (let i = start; i <= end; i++) {
+                              newSelected.add(processes[i].name)
+                            }
+                            return { ...prev, [wserver.id]: newSelected }
+                          })
+                        }
+                      }}>
                         <input
                           type="checkbox"
                           checked={selectedProcesses[wserver.id]?.has(process.name) || false}
-                          onChange={(e) => {
-                            setSelectedProcesses(prev => {
-                              const current = prev[wserver.id] || new Set()
-                              const newSet = new Set(current)
-                              if (e.target.checked) {
-                                newSet.add(process.name)
-                              } else {
-                                newSet.delete(process.name)
-                              }
-                              return { ...prev, [wserver.id]: newSet }
-                            })
-                          }}
                           className="rounded"
                         />
                       </td>
@@ -1483,7 +1586,13 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
       })}
 
       {getTotalSelected() > 0 && (
-        <div className="mt-8 bg-gray-800 rounded-lg p-4">
+        <div
+          className="mt-8 bg-gray-800 rounded-lg p-4"
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setSelectedContextMenu({ x: e.clientX, y: e.clientY })
+          }}
+        >
           <h4 className="text-white font-medium mb-4">Selected Processes ({getTotalSelected()})</h4>
           <div className="mb-4 max-h-32 overflow-y-auto">
             {getSelectedList().map((item, index) => (
@@ -1500,16 +1609,16 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
               Start Selected
             </button>
             <button
-              onClick={() => handleBulkAction('stop')}
-              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
-            >
-              Stop Selected
-            </button>
-            <button
               onClick={() => handleBulkAction('restart')}
               className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
             >
               Restart Selected
+            </button>
+            <button
+              onClick={() => handleBulkAction('stop')}
+              className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+            >
+              Stop Selected
             </button>
             <button
               onClick={() => handleBulkAction('delete')}
@@ -1521,11 +1630,66 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
               onClick={() => setSelectedProcesses({})}
               className="px-3 py-1 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
             >
-              Clear Selection
+              Clear Selected
             </button>
           </div>
         </div>
       )}
+
+      {selectedContextMenu && (
+        <div
+          className="fixed z-50 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1"
+          style={{ left: selectedContextMenu.x, top: selectedContextMenu.y }}
+        >
+          <button
+            onClick={() => {
+              handleBulkAction('start')
+              setSelectedContextMenu(null)
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+          >
+            Start Selected
+          </button>
+          <button
+            onClick={() => {
+              handleBulkAction('restart')
+              setSelectedContextMenu(null)
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+          >
+            Restart Selected
+          </button>
+          <button
+            onClick={() => {
+              handleBulkAction('stop')
+              setSelectedContextMenu(null)
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+          >
+            Stop Selected
+          </button>
+          <button
+            onClick={() => {
+              handleBulkAction('delete')
+              setSelectedContextMenu(null)
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-700"
+          >
+            Delete Selected
+          </button>
+          <button
+            onClick={() => {
+              setSelectedProcesses({})
+              setSelectedContextMenu(null)
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+          >
+            Clear Selected
+          </button>
+        </div>
+      )}
+
+
 
       {wservers.length === 0 && (
         <p className="text-gray-400 text-center py-8">No servers configured. Add servers in the WServer tab.</p>
@@ -1545,9 +1709,9 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
           className="fixed z-50 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          {contextMenu.process.pm2_env.status === 'online' ? (
+          {hasPermission(contextMenu.serverId, contextMenu.process.name, 'control') && (
             <>
-              {hasPermission(contextMenu.serverId, contextMenu.process.name, 'control') && (
+              {contextMenu.process.pm2_env.status === 'online' ? (
                 <>
                   <button
                     onClick={() => {
@@ -1568,20 +1732,18 @@ export default function PM2Tab({ activeTab, user }: PM2TabProps) {
                     Stop
                   </button>
                 </>
+              ) : (
+                <button
+                  onClick={() => {
+                    handleAction(contextMenu.serverId, 'start', contextMenu.process)
+                    setContextMenu(null)
+                  }}
+                  className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
+                >
+                  Start
+                </button>
               )}
             </>
-          ) : (
-            hasPermission(contextMenu.serverId, contextMenu.process.name, 'control') && (
-              <button
-                onClick={() => {
-                  handleAction(contextMenu.serverId, 'start', contextMenu.process)
-                  setContextMenu(null)
-                }}
-                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700"
-              >
-                Start
-              </button>
-            )
           )}
           <button
             onClick={() => {

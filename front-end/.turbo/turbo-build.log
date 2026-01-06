@@ -6,6 +6,7 @@
   - Environments: .env
 
    Creating an optimized production build ...
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: EPERM: operation not permitted, rename 'D:\PDev\MeoPanel\MeoPanel-Client\front-end\.next\cache\webpack\client-production\0.pack_' -> 'D:\PDev\MeoPanel\MeoPanel-Client\front-end\.next\cache\webpack\client-production\0.pack'
  ✓ Compiled successfully
    Linting and checking validity of types ...
    Collecting page data ...
@@ -20,7 +21,7 @@
 Route (app)                              Size     First Load JS
 ┌ ○ /                                    2.76 kB        92.3 kB
 ├ ○ /_not-found                          873 B          88.2 kB
-├ ○ /dashboard                           20.4 kB         110 kB
+├ ○ /dashboard                           20.5 kB         110 kB
 ├ ○ /reset-password                      2.71 kB          90 kB
 ├ ○ /settings                            5.16 kB        94.7 kB
 └ ○ /verify-email                        2.55 kB        89.8 kB
